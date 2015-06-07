@@ -1,0 +1,16 @@
+# Virtual Escrow Service
+
+This is just a quick and dirty example of exchanging virtual goods between two untrusted peers. I got the idea while trading Pokemon and wondering how one might write
+an online service that can handle such an exchange of local data between two arbitrary endpoints with a minimum of exploitation.
+
+Currently it's only designed to build on Linux.
+
+## Dependencies
+
+ * [CMake 3.0](http://www.cmake.org/) (build separately)
+ * [SQLite 3.8.10.2](https://www.sqlite.org/) (included in repository)
+ * [Google Protobuf 2.6.1](https://github.com/google/protobuf) (build separately)
+
+## License
+
+The service is licensed under the [CC0 1.0 universal license](LICENSE.md). Dependencies licensed separately.
