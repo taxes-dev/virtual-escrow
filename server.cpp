@@ -6,6 +6,7 @@
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include "sqlite-amalgamation-3081002/sqlite3.h"
 
 void error(const char *msg) {
 	std::cerr << msg << std::endl;
@@ -14,7 +15,8 @@ void error(const char *msg) {
 
 void process(int newsockfd) {
 	char buffer[256];
-	int n;
+	int n, rc;
+	sqlite3 *db;
 	
 	bzero(buffer, 256);
 	n = read(newsockfd, buffer, 255);
@@ -27,6 +29,13 @@ void process(int newsockfd) {
 	if (n < 0) {
 		error("ERROR writing to socket");
 	}
+	
+	rc = sqlite3_open("test.db", &db);
+	if (rc) {
+		sqlite3_close(db);
+		error("ERROR can't open db");
+	}
+	sqlite3_close(db);
 	
 	close(newsockfd);
 }
