@@ -11,7 +11,7 @@
 #include <netdb.h> 
 
 void error(const char *msg) {
-	std::cout << msg << "\n" << std::endl;
+	std::cout << msg << std::endl;
 	exit(1);
 }
 
@@ -61,7 +61,7 @@ int main(int argc, char *argv[]) {
 		error("ERROR reading from socket");
 	}
 	
-	std::cout << buffer << "\n" << std::endl;
+	std::cout << buffer << std::endl;
 	close(sockfd);
 	return 0;
 }

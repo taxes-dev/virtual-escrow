@@ -8,19 +8,37 @@
 #include <netinet/in.h>
 
 void error(const char *msg) {
-	std::cerr << msg << "\n" << std::endl;
+	std::cerr << msg << std::endl;
 	exit(1);
+}
+
+void process(int newsockfd) {
+	char buffer[256];
+	int n;
+	
+	bzero(buffer, 256);
+	n = read(newsockfd, buffer, 255);
+	if (n < 0) {
+		error("ERROR reading from socket");
+	}
+	
+	std::cout << "Here is the message: " << buffer << std::endl;
+	n = write(newsockfd, "I got your message", 18);
+	if (n < 0) {
+		error("ERROR writing to socket");
+	}
+	
+	close(newsockfd);
 }
 
 int main(int argc, char **argv) {
 	int sockfd, newsockfd, portno;
 	socklen_t clilen;
-	char buffer[256];
 	struct sockaddr_in serv_addr, cli_addr;
-	int n;
+	int pid;
 	
 	if (argc < 2) {
-		error("ERROR, no port provided\n");
+		error("ERROR, no port provided");
 	}
 	
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -39,24 +57,31 @@ int main(int argc, char **argv) {
 	
 	listen(sockfd,5);
 	clilen = sizeof(cli_addr);
-	newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
-	if (newsockfd < 0) {
-		error("ERROR on accept");
-	}
 	
-	bzero(buffer,256);
-	n = read(newsockfd, buffer, 255);
-	if (n < 0) {
-		error("ERROR reading from socket");
-	}
-	
-	std::cout << "Here is the message: " << buffer << std::endl;
-	n = write(newsockfd, "I got your message", 18);
-	if (n < 0) {
-		error("ERROR writing to socket");
-	}
-	
-	close(newsockfd);
+	while (1)
+	{
+		std::cout << "Waiting for connection" << std::endl;
+		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
+		if (newsockfd < 0) {
+			error("ERROR on accept");
+		}
+		
+		/* Create child process */
+		pid = fork();
+		if (pid < 0) {
+			error("ERROR on fork");
+		}
+		
+		if (pid == 0) {
+			/* This is the client process */
+			close(sockfd);
+			process(newsockfd);
+			exit(0);
+		} else {
+			close(newsockfd);
+		}
+	} /* end of while */
+		
 	close(sockfd);
 	return 0; 
 	
