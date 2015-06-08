@@ -8,7 +8,11 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <netdb.h> 
+#include <netdb.h>
+#include "protos/echo.pb.h"
+#include "messageformat.h"
+
+#define BUFFER_SIZE sizeof(escrow::MessageWrapper)
 
 void error(const char *msg) {
 	std::cout << msg << std::endl;
@@ -20,7 +24,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	
-	char buffer[256];
+	char buffer[BUFFER_SIZE];
 	if (argc < 3) {
 		error("usage: ve-client hostname port");
 	}
@@ -45,23 +49,41 @@ int main(int argc, char *argv[]) {
 	}
 	
 	std::cout << "Please enter the message: " << std::endl;
-	bzero(buffer, 256);
+	bzero(buffer, BUFFER_SIZE);
 	std::string input;
 	std::getline(std::cin, input);
-	std::strcpy(buffer, input.c_str());
-
-	n = write(sockfd,buffer,strlen(buffer));
+	
+	escrow::EchoRequest* request = new escrow::EchoRequest();
+	request->set_message(input);
+	if (request->SerializeToArray(buffer, BUFFER_SIZE) == false) {
+		error("ERROR serializing request to array");
+	}
+	escrow::MessageWrapper requestFrame;
+	requestFrame.message_id = 0;
+	requestFrame.body_size = request->ByteSize();
+	memcpy(requestFrame.body, buffer, requestFrame.body_size);
+	
+	n = write(sockfd, &requestFrame, MESSAGEWRAPPER_SIZE(requestFrame));
 	if (n < 0) {
 		error("ERROR writing to socket");
 	}
 	
-	bzero(buffer, 256);
-	n = read(sockfd, buffer, 255);
+	bzero(buffer, BUFFER_SIZE);
+	n = read(sockfd, buffer, BUFFER_SIZE);
 	if (n < 0) {
 		error("ERROR reading from socket");
 	}
 	
-	std::cout << buffer << std::endl;
+	escrow::MessageWrapper responseFrame;
+	memcpy(&responseFrame, buffer, n);
+	
+	escrow::EchoResponse* response = new escrow::EchoResponse();
+	if (response->ParseFromArray(responseFrame.body, responseFrame.body_size) == false) {
+		error("ERROR parsing response from array");
+	}
+	
+	std::cout << "Got response: " << response->message() << std::endl;
 	close(sockfd);
+	delete request;
 	return 0;
 }

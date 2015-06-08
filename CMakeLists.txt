@@ -1,17 +1,19 @@
-cmake_minimum_required(VERSION 2.6)
+cmake_minimum_required(VERSION 3.0)
 project(virtualescrow)
 
-execute_process(COMMAND pkg-config --cflags protobuf OUTPUT_VARIABLE PROTOBUF_CFLAGS OUTPUT_STRIP_TRAILING_WHITESPACE)
-execute_process(COMMAND pkg-config --libs protobuf OUTPUT_VARIABLE PROTOBUF_LIBS OUTPUT_STRIP_TRAILING_WHITESPACE)
+find_package(Protobuf 2.6.1 REQUIRED)
+find_program(PKG_CONFIG pkg-config)
+
+file(GLOB PROTO_FILES "${CMAKE_SOURCE_DIR}/protos/*.proto")
+PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 
 add_library(SQLITE sqlite-amalgamation-3081002/sqlite3.c)
-add_executable(ve-server server.cpp)
-set_target_properties(ve-server PROPERTIES COMPILE_FLAGS "${PROTOBUF_CFLAGS}")
-set_target_properties(ve-server PROPERTIES LINK_FLAGS "${PROTOBUF_LIBS}")
-target_link_libraries(ve-server SQLITE pthread dl)
-add_executable(ve-client client.cpp)
-set_target_properties(ve-client PROPERTIES COMPILE_FLAGS "${PROTOBUF_CFLAGS}")
-set_target_properties(ve-client PROPERTIES LINK_FLAGS "${PROTOBUF_LIBS}")
-target_link_libraries(ve-client SQLITE pthread dl)
+add_executable(ve-server server.cpp ${PROTO_SRCS})
+target_link_libraries(ve-server SQLITE pthread dl ${PROTOBUF_LIBRARIES})
+target_include_directories(ve-server PUBLIC ${CMAKE_BINARY_DIR}/protos ${PROTOBUF_INCLUDE_DIRS})
+
+add_executable(ve-client client.cpp ${PROTO_SRCS})
+target_link_libraries(ve-client SQLITE pthread dl ${PROTOBUF_LIBRARIES})
+target_include_directories(ve-client PUBLIC ${CMAKE_BINARY_DIR}/protos ${PROTOBUF_INCLUDE_DIRS})
 
 install(TARGETS ve-server ve-client RUNTIME DESTINATION bin)

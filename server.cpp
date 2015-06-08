@@ -6,7 +6,12 @@
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <arpa/inet.h>
 #include "sqlite-amalgamation-3081002/sqlite3.h"
+#include "protos/echo.pb.h"
+#include "messageformat.h"
+
+#define BUFFER_SIZE sizeof(escrow::MessageWrapper)
 
 void error(const char *msg) {
 	std::cerr << msg << std::endl;
@@ -14,18 +19,36 @@ void error(const char *msg) {
 }
 
 void process(int newsockfd) {
-	char buffer[256];
+	char buffer[BUFFER_SIZE];
 	int n, rc;
 	sqlite3 *db;
 	
-	bzero(buffer, 256);
-	n = read(newsockfd, buffer, 255);
+	bzero(buffer, BUFFER_SIZE);
+	n = read(newsockfd, buffer, BUFFER_SIZE);
 	if (n < 0) {
 		error("ERROR reading from socket");
 	}
+
+	escrow::MessageWrapper requestFrame;
+	memcpy(&requestFrame, buffer, n);
+	escrow::EchoRequest* request = new escrow::EchoRequest();
+	if (request->ParseFromArray(requestFrame.body, requestFrame.body_size) == false) {
+		error("ERROR parsing request from array");
+	}
 	
-	std::cout << "Here is the message: " << buffer << std::endl;
-	n = write(newsockfd, "I got your message", 18);
+	std::cout << "Here is the message: " << request->message() << std::endl;
+	
+	escrow::EchoResponse* response = new escrow::EchoResponse();
+	response->set_message("I got your message: " + request->message());
+	if (response->SerializeToArray(buffer, BUFFER_SIZE) == false) {
+		error("ERROR serializing response to array");
+	}
+	
+	escrow::MessageWrapper responseFrame;
+	responseFrame.message_id = 0;
+	responseFrame.body_size = response->ByteSize();
+	memcpy(responseFrame.body, buffer, responseFrame.body_size);
+	n = write(newsockfd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
 	if (n < 0) {
 		error("ERROR writing to socket");
 	}
@@ -38,6 +61,8 @@ void process(int newsockfd) {
 	sqlite3_close(db);
 	
 	close(newsockfd);
+	
+	delete request, response;
 }
 
 int main(int argc, char **argv) {
@@ -45,6 +70,9 @@ int main(int argc, char **argv) {
 	socklen_t clilen;
 	struct sockaddr_in serv_addr, cli_addr;
 	int pid;
+	char cli_ip[INET_ADDRSTRLEN];
+	
+	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
 	if (argc < 2) {
 		error("ERROR, no port provided");
@@ -64,7 +92,7 @@ int main(int argc, char **argv) {
 		error("ERROR on binding");
 	}
 	
-	listen(sockfd,5);
+	listen(sockfd, 5);
 	clilen = sizeof(cli_addr);
 	
 	while (1)
@@ -74,6 +102,9 @@ int main(int argc, char **argv) {
 		if (newsockfd < 0) {
 			error("ERROR on accept");
 		}
+		
+		inet_ntop(AF_INET, &(cli_addr.sin_addr), cli_ip, INET_ADDRSTRLEN);
+		std::cout << "Client connected: " << cli_ip << ":" << cli_addr.sin_port << std::endl;
 		
 		/* Create child process */
 		pid = fork();
@@ -92,6 +123,6 @@ int main(int argc, char **argv) {
 	} /* end of while */
 		
 	close(sockfd);
+	google::protobuf::ShutdownProtobufLibrary();
 	return 0; 
-	
 }
