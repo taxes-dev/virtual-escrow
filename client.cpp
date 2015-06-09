@@ -9,7 +9,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
-#include "protos/echo.pb.h"
+#include "echo.pb.h"
 #include "messageformat.h"
 
 #define BUFFER_SIZE sizeof(escrow::MessageWrapper)

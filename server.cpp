@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "sqlite-amalgamation-3081002/sqlite3.h"
-#include "protos/echo.pb.h"
+#include "echo.pb.h"
 #include "messageformat.h"
 
 #define BUFFER_SIZE sizeof(escrow::MessageWrapper)
