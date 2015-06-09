@@ -13,4 +13,8 @@ namespace escrow {
 
 #define MESSAGEWRAPPER_SIZE(p) (sizeof(int) + sizeof(int) + p.body_size)
 
+// protobuf mappings
+#define MSG_ID_ECHOREQUEST 1
+#define MSG_ID_ECHORESPONSE 2
+
 #endif

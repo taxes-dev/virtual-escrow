@@ -1,28 +1,42 @@
-#include <iostream>
-#include <string>
 #include <cstring>
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
+#include <iostream>
+#include <sstream>
+#include <string>
 #include <unistd.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include "echo.pb.h"
 #include "messageformat.h"
+#include "shared.h"
 
-#define BUFFER_SIZE sizeof(escrow::MessageWrapper)
-
-void error(const char *msg) {
-	std::cout << msg << std::endl;
-	exit(1);
+void socket_write_message(const int sockfd, const int message_id, const google::protobuf::MessageLite * message) {
+	escrow::MessageWrapper responseFrame;
+	if (create_wrapper_from_protobuf(message, message_id, &responseFrame) == false) {
+		error("ERROR framing response");
+	}
+	
+	int n = write(sockfd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
+	if (n < 0) {
+		error("ERROR writing to socket");
+	}
 }
 
+void handle_EchoResponse(const int newsockfd, const escrow::EchoResponse * echoResponse) {
+	std::stringstream logmsg;
+	logmsg << "Got response: " << echoResponse->message() << std::endl;
+	info(logmsg.str().c_str());
+}
+	
 int main(int argc, char *argv[]) {
 	int sockfd, portno, n;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
+	
+	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
 	char buffer[BUFFER_SIZE];
 	if (argc < 3) {
@@ -49,41 +63,32 @@ int main(int argc, char *argv[]) {
 	}
 	
 	std::cout << "Please enter the message: " << std::endl;
-	bzero(buffer, BUFFER_SIZE);
 	std::string input;
 	std::getline(std::cin, input);
 	
-	escrow::EchoRequest* request = new escrow::EchoRequest();
-	request->set_message(input);
-	if (request->SerializeToArray(buffer, BUFFER_SIZE) == false) {
-		error("ERROR serializing request to array");
-	}
-	escrow::MessageWrapper requestFrame;
-	requestFrame.message_id = 0;
-	requestFrame.body_size = request->ByteSize();
-	memcpy(requestFrame.body, buffer, requestFrame.body_size);
+	escrow::EchoRequest* echoRequest = new escrow::EchoRequest();
+	echoRequest->set_message(input);
 	
-	n = write(sockfd, &requestFrame, MESSAGEWRAPPER_SIZE(requestFrame));
-	if (n < 0) {
-		error("ERROR writing to socket");
-	}
+	socket_write_message(sockfd, MSG_ID_ECHOREQUEST, echoRequest);
 	
-	bzero(buffer, BUFFER_SIZE);
 	n = read(sockfd, buffer, BUFFER_SIZE);
 	if (n < 0) {
 		error("ERROR reading from socket");
 	}
 	
-	escrow::MessageWrapper responseFrame;
-	memcpy(&responseFrame, buffer, n);
+	message_dispatch(buffer, n, [sockfd](int message_id, google::protobuf::MessageLite * message) {
+		switch (message_id) {
+			case MSG_ID_ECHORESPONSE:
+				handle_EchoResponse(sockfd, (escrow::EchoResponse *)message);
+				break;
+			default:
+				error("ERROR unhandled message");
+				break;
+		}
+	});
 	
-	escrow::EchoResponse* response = new escrow::EchoResponse();
-	if (response->ParseFromArray(responseFrame.body, responseFrame.body_size) == false) {
-		error("ERROR parsing response from array");
-	}
-	
-	std::cout << "Got response: " << response->message() << std::endl;
 	close(sockfd);
-	delete request;
+	delete echoRequest;
+	google::protobuf::ShutdownProtobufLibrary();
 	return 0;
 }

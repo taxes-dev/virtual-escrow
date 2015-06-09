@@ -1,21 +1,41 @@
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sstream>
 #include <unistd.h>
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include "sqlite-amalgamation-3081002/sqlite3.h"
-#include "echo.pb.h"
-#include "messageformat.h"
+#include "shared.h"
 
-#define BUFFER_SIZE sizeof(escrow::MessageWrapper)
 
-void error(const char *msg) {
-	std::cerr << msg << std::endl;
-	exit(1);
+void socket_write_message(const int newsockfd, const int message_id, const google::protobuf::MessageLite * message) {
+	escrow::MessageWrapper responseFrame;
+	if (create_wrapper_from_protobuf(message, message_id, &responseFrame) == false) {
+		error("ERROR framing response");
+	}
+	
+	int n = write(newsockfd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
+	if (n < 0) {
+		error("ERROR writing to socket");
+	}
+}
+
+void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoRequest) {
+	std::stringstream logmsg;
+	
+	logmsg << "Here is the message: " << echoRequest->message() << std::endl; 
+	info(logmsg.str().c_str());
+	
+	escrow::EchoResponse * echoResponse = new escrow::EchoResponse();
+	echoResponse->set_message(echoRequest->message());
+
+	socket_write_message(newsockfd, MSG_ID_ECHORESPONSE, echoResponse);
+	
+	delete echoResponse;
 }
 
 void process(int newsockfd) {
@@ -23,46 +43,30 @@ void process(int newsockfd) {
 	int n, rc;
 	sqlite3 *db;
 	
-	bzero(buffer, BUFFER_SIZE);
 	n = read(newsockfd, buffer, BUFFER_SIZE);
 	if (n < 0) {
 		error("ERROR reading from socket");
 	}
-
-	escrow::MessageWrapper requestFrame;
-	memcpy(&requestFrame, buffer, n);
-	escrow::EchoRequest* request = new escrow::EchoRequest();
-	if (request->ParseFromArray(requestFrame.body, requestFrame.body_size) == false) {
-		error("ERROR parsing request from array");
-	}
 	
-	std::cout << "Here is the message: " << request->message() << std::endl;
-	
-	escrow::EchoResponse* response = new escrow::EchoResponse();
-	response->set_message("I got your message: " + request->message());
-	if (response->SerializeToArray(buffer, BUFFER_SIZE) == false) {
-		error("ERROR serializing response to array");
-	}
-	
-	escrow::MessageWrapper responseFrame;
-	responseFrame.message_id = 0;
-	responseFrame.body_size = response->ByteSize();
-	memcpy(responseFrame.body, buffer, responseFrame.body_size);
-	n = write(newsockfd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
-	if (n < 0) {
-		error("ERROR writing to socket");
-	}
-	
-	rc = sqlite3_open("test.db", &db);
+	message_dispatch(buffer, n, [newsockfd](int message_id, google::protobuf::MessageLite * message) {
+		switch (message_id) {
+			case MSG_ID_ECHOREQUEST:
+				handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
+				break;
+			default:
+				error("ERROR unhandled message");
+				break;
+		}
+	});
+		
+	/*rc = sqlite3_open("test.db", &db);
 	if (rc) {
 		sqlite3_close(db);
 		error("ERROR can't open db");
 	}
-	sqlite3_close(db);
+	sqlite3_close(db);*/
 	
 	close(newsockfd);
-	
-	delete request, response;
 }
 
 int main(int argc, char **argv) {
@@ -97,14 +101,16 @@ int main(int argc, char **argv) {
 	
 	while (1)
 	{
-		std::cout << "Waiting for connection" << std::endl;
+		info("Waiting for connection");
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		if (newsockfd < 0) {
 			error("ERROR on accept");
 		}
 		
 		inet_ntop(AF_INET, &(cli_addr.sin_addr), cli_ip, INET_ADDRSTRLEN);
-		std::cout << "Client connected: " << cli_ip << ":" << cli_addr.sin_port << std::endl;
+		std::stringstream logmsg;
+		logmsg << "Client connected: " << cli_ip << ":" << cli_addr.sin_port << std::endl;
+		info(logmsg.str().c_str());
 		
 		/* Create child process */
 		pid = fork();
