@@ -17,6 +17,7 @@
 #include "shared.h"
 
 uuid_t g_client_id;
+bool g_session_set = false;
 uuid_t g_session_id;
 
 
@@ -46,6 +47,17 @@ void handle_EchoResponse(const escrow::EchoResponse * echoResponse) {
 }
 
 void handle_SessionStartResponse(const escrow::SessionStartResponse * sessionStartResponse) {
+	switch (sessionStartResponse->error()) {
+		case escrow::SessionStartError::OK:
+			sessionStartResponse->session_id().copy((char *)g_session_id, sizeof(uuid_t));
+			g_session_set = true;
+			break;
+		case escrow::SessionStartError::CLIENT_ALREADY_CONNECTED:
+			break;
+		default:
+			error("ERROR unknown session start error code");
+			break;
+	}
 }
 
 bool process_message(const int sockfd, bool wait) {
@@ -126,7 +138,7 @@ int main(int argc, char *argv[]) {
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	std::stringstream logmsg;
-	char uuid_buffer[37];
+	char uuid_buffer[UUID_STR_SIZE];
 	
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
@@ -158,10 +170,14 @@ int main(int argc, char *argv[]) {
 	uuid_unparse(g_client_id, uuid_buffer);
 	logmsg << "I am client " << uuid_buffer << std::endl;
 	info(logmsg.str().c_str());
+	
 	cmd_SessionStartRequest(sockfd, g_client_id);
 	process_message(sockfd, true); // block until we get a SessionStartResponse
-	client_menu(sockfd);
-	
+	if (g_session_set) {
+		client_menu(sockfd);
+	} else {
+		info("Client with this ID is already connected, disconnecting");
+	}
 	shutdown(sockfd, SHUT_RDWR);
 	google::protobuf::ShutdownProtobufLibrary();
 	info("done");

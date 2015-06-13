@@ -16,6 +16,9 @@
 #include "shared.h"
 #include "server-db.h"
 
+bool g_connected = false;
+uuid_t g_connected_client_id;
+uuid_t g_connected_session_id;
 
 void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoRequest) {
 	std::stringstream logmsg;
@@ -32,35 +35,47 @@ void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoReq
 }
 
 void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow::SessionStartRequest * sessionStartRequest) {
-	uuid_t client_id, session_id;
 	std::stringstream logmsg, query;
-	char s_client_id[37], s_session_id[37];
-	
-	// get client ID from message
-	sessionStartRequest->client_id().copy((char *)client_id, sizeof(uuid_t));
-	uuid_unparse(client_id, s_client_id);
-	logmsg << "Got connection from: " << s_client_id << std::endl;
-	info(logmsg.str().c_str());
-	
-	// create response
+	char s_client_id[UUID_STR_SIZE], s_session_id[UUID_STR_SIZE];
 	escrow::SessionStartResponse * sessionStartResponse = new escrow::SessionStartResponse();
-	sessionStartResponse->set_client_id(client_id, sizeof(uuid_t));
 	
-	// check for duplicate session
-	query << "SELECT session_id, client_id FROM sessions;" << std::endl; // WHERE client_id = '" << s_client_id << "';" << std::endl;
-	DatabaseResults results;
-	exec_database_with_results(db, query.str().c_str(), &results);
-	std::cout << results.front()["session_id"] << " " << results.front()["client_id"] << std::endl;
-	
-	// generate new session id and record
-	uuid_generate(session_id);
-	uuid_unparse(session_id, s_session_id);
-	sessionStartResponse->set_session_id(session_id, sizeof(uuid_t));
-	sessionStartResponse->set_error(escrow::SessionStartError::OK);
-	
-	query.clear();
-	query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
-	exec_database(db, query.str().c_str());
+	// message out of order?
+	if (g_connected) {
+		sessionStartResponse->set_client_id(g_connected_client_id, sizeof(uuid_t));
+		sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
+		sessionStartResponse->set_error(escrow::SessionStartError::SESSION_STARTED);
+	} else {
+		// get client ID from message
+		sessionStartRequest->client_id().copy((char *)g_connected_client_id, sizeof(uuid_t));
+		uuid_unparse(g_connected_client_id, s_client_id);
+		logmsg << "Got connection from: " << s_client_id << std::endl;
+		info(logmsg.str().c_str());
+		
+		// create response
+		sessionStartResponse->set_client_id(g_connected_client_id, sizeof(uuid_t));
+		
+		// check for duplicate session
+		query << "SELECT session_id FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
+		DatabaseResults results;
+		exec_database_with_results(db, query.str().c_str(), &results);
+		if (results.size() > 0) {
+			// duplicate client
+			uuid_parse(results.back()["session_id"].c_str(), g_connected_session_id); 
+			sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
+			sessionStartResponse->set_error(escrow::SessionStartError::CLIENT_ALREADY_CONNECTED);
+		} else {
+			// generate new session id and record
+			uuid_generate(g_connected_session_id);
+			g_connected = true;
+			uuid_unparse(g_connected_session_id, s_session_id);
+			sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
+			sessionStartResponse->set_error(escrow::SessionStartError::OK);
+		
+			query.clear();
+			query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
+			exec_database(db, query.str().c_str());
+		}
+	}
 	
 	socket_write_message(newsockfd, MSG_ID_SESSIONSTARTRESPONSE, sessionStartResponse);
 	
@@ -72,6 +87,8 @@ void process(int newsockfd) {
 	int n;
 	sqlite3 * db;
 	struct pollfd sds;
+	std::stringstream query;
+	char s_client_id[UUID_STR_SIZE];
 	
 	open_database(&db);
 	
@@ -114,6 +131,9 @@ void process(int newsockfd) {
 	}
 	
 	info("Client disconnected, shutting down");
+	uuid_unparse(g_connected_client_id, s_client_id);
+	query << "DELETE FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
+	exec_database(db, query.str().c_str());
 	sqlite3_close(db);
 	
 	close(newsockfd);

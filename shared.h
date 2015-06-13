@@ -5,6 +5,7 @@
 #include "echo.pb.h"
 
 #define BUFFER_SIZE sizeof(escrow::MessageWrapper)
+#define UUID_STR_SIZE 37
 
 bool create_protobuf_from_wrapper(const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * protobuf);
 
