@@ -14,40 +14,8 @@
 #include "echo.pb.h"
 #include "session.pb.h"
 #include "shared.h"
+#include "server-db.h"
 
-static int db_callback(void * notUsed, int argc, char **argv, char **colName) {
-	for (int i = 0; i < argc; i++) {
-		std::cout << colName[i] << " = " << (argv[i] ? argv[i] : "NULL") << std::endl;
-	}
-	return 0;
-}
-
-void exec_database(sqlite3 * db, const char * command) {
-	char *errmsg = 0;
-	int rc = sqlite3_exec(db, command, db_callback, 0, &errmsg);
-	if (rc != SQLITE_OK) {
-		error(errmsg);
-		sqlite3_free(errmsg);
-	}
-}
-
-void open_database(sqlite3 ** db) {
-	std::stringstream query;
-	
-	// open database
-	int rc = sqlite3_open("virtualescrow.db", db);
-	if (rc) {
-		sqlite3_close(*db);
-		error("ERROR can't open db");
-	}
-	
-	// create schema if it doesn't exist
-	query << "CREATE TABLE IF NOT EXISTS sessions (client_id TEXT UNIQUE, session_id TEXT);"
-		<< std::endl;
-	
-	exec_database(*db, query.str().c_str());
-	std::cout << "DB " << *db << std::endl;
-}
 
 void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoRequest) {
 	std::stringstream logmsg;
@@ -68,19 +36,24 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 	std::stringstream logmsg, query;
 	char s_client_id[37], s_session_id[37];
 	
+	// get client ID from message
 	sessionStartRequest->client_id().copy((char *)client_id, sizeof(uuid_t));
 	uuid_unparse(client_id, s_client_id);
 	logmsg << "Got connection from: " << s_client_id << std::endl;
 	info(logmsg.str().c_str());
 	
+	// create response
 	escrow::SessionStartResponse * sessionStartResponse = new escrow::SessionStartResponse();
 	sessionStartResponse->set_client_id(client_id, sizeof(uuid_t));
+	
+	// check for duplicate session
+	
+	// generate new session id and record
 	uuid_generate(session_id);
 	uuid_unparse(session_id, s_session_id);
 	sessionStartResponse->set_session_id(session_id, sizeof(uuid_t));
 	sessionStartResponse->set_error(escrow::SessionStartError::OK);
 	
-	std::cout << "DB " << db << std::endl;
 	query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
 	info(query.str().c_str());
 	exec_database(db, query.str().c_str());

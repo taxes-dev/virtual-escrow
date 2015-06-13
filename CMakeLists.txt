@@ -11,7 +11,7 @@ PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 add_library(SQLITE sqlite-amalgamation-3081002/sqlite3.c)
 
 # Server executable
-add_executable(ve-server server.cpp shared.cpp ${PROTO_SRCS})
+add_executable(ve-server server.cpp shared.cpp server-db.cpp ${PROTO_SRCS})
 target_compile_options(ve-server PUBLIC "-std=c++11")
 target_link_libraries(ve-server SQLITE pthread dl uuid ${PROTOBUF_LIBRARIES})
 target_include_directories(ve-server PUBLIC ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLUDE_DIRS})
