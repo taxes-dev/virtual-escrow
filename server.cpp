@@ -47,6 +47,10 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 	sessionStartResponse->set_client_id(client_id, sizeof(uuid_t));
 	
 	// check for duplicate session
+	query << "SELECT session_id, client_id FROM sessions;" << std::endl; // WHERE client_id = '" << s_client_id << "';" << std::endl;
+	DatabaseResults results;
+	exec_database_with_results(db, query.str().c_str(), &results);
+	std::cout << results.front()["session_id"] << " " << results.front()["client_id"] << std::endl;
 	
 	// generate new session id and record
 	uuid_generate(session_id);
@@ -54,8 +58,8 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 	sessionStartResponse->set_session_id(session_id, sizeof(uuid_t));
 	sessionStartResponse->set_error(escrow::SessionStartError::OK);
 	
+	query.clear();
 	query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
-	info(query.str().c_str());
 	exec_database(db, query.str().c_str());
 	
 	socket_write_message(newsockfd, MSG_ID_SESSIONSTARTRESPONSE, sessionStartResponse);
