@@ -1,6 +1,8 @@
 #ifndef _MESSAGEFORMAT_H
 #define _MESSAGEFORMAT_H
 
+#include <functional>
+
 #define MESSAGE_MAX_BODY_SIZE (1024 - sizeof(int) - sizeof(int))
 
 namespace escrow {
@@ -16,5 +18,7 @@ namespace escrow {
 // protobuf mappings
 #define MSG_ID_ECHOREQUEST 1
 #define MSG_ID_ECHORESPONSE 2
+#define MSG_ID_SESSIONSTARTREQUEST 3
+#define MSG_ID_SESSIONSTARTRESPONSE 4
 
 #endif

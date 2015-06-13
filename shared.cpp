@@ -1,7 +1,10 @@
 #include <iostream>
+#include <sstream>
 #include <sys/types.h>
 #include <unistd.h>
 #include "shared.h"
+#include "echo.pb.h"
+#include "session.pb.h"
 
 
 bool create_protobuf_from_wrapper(const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * protobuf) {
@@ -52,6 +55,12 @@ void message_dispatch(const char * buffer, const size_t buffer_size, const std::
 		case MSG_ID_ECHORESPONSE:
 			message = new escrow::EchoResponse();
 			break;
+		case MSG_ID_SESSIONSTARTREQUEST:
+			message = new escrow::SessionStartRequest();
+			break;
+		case MSG_ID_SESSIONSTARTRESPONSE:
+			message = new escrow::SessionStartResponse();
+			break;
 		default:
 			error("ERROR unknown message id");
 			break;
@@ -62,4 +71,22 @@ void message_dispatch(const char * buffer, const size_t buffer_size, const std::
 	}
 	handler(requestFrame.message_id, message);
 	delete message;
+}
+
+void socket_write_message(const int sockfd, const int message_id, const google::protobuf::MessageLite * message) {
+	std::stringstream logmsg;
+	if (message->IsInitialized() == false) {
+		logmsg << "ERROR message not prepared: " << message->InitializationErrorString() << std::endl;
+		error(logmsg.str().c_str());
+	}
+	
+	escrow::MessageWrapper responseFrame;
+	if (create_wrapper_from_protobuf(message, message_id, &responseFrame) == false) {
+		error("ERROR framing response");
+	}
+	
+	int n = write(sockfd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
+	if (n < 0) {
+		error("ERROR writing to socket");
+	}
 }

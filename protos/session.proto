@@ -1,0 +1,16 @@
+package escrow;
+
+enum SessionStartError {
+	OK = 0;
+	CLIENT_ALREADY_CONNECTED = 1;
+}
+
+message SessionStartRequest {
+	required bytes client_id = 1;
+}
+
+message SessionStartResponse {
+	required bytes client_id = 1;
+	optional bytes session_id = 2;
+	required SessionStartError error = 3 [ default = OK ];
+}

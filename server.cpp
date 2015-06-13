@@ -4,23 +4,23 @@
 #include <iostream>
 #include <sstream>
 #include <unistd.h>
+#include <sys/poll.h>
 #include <sys/types.h> 
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <uuid/uuid.h>
 #include "sqlite-amalgamation-3081002/sqlite3.h"
+#include "echo.pb.h"
+#include "session.pb.h"
 #include "shared.h"
 
 
-void socket_write_message(const int newsockfd, const int message_id, const google::protobuf::MessageLite * message) {
-	escrow::MessageWrapper responseFrame;
-	if (create_wrapper_from_protobuf(message, message_id, &responseFrame) == false) {
-		error("ERROR framing response");
-	}
-	
-	int n = write(newsockfd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
-	if (n < 0) {
-		error("ERROR writing to socket");
+void open_database(sqlite3 * db) {
+	int rc = sqlite3_open("virtualescrow.db", &db);
+	if (rc) {
+		sqlite3_close(db);
+		error("ERROR can't open db");
 	}
 }
 
@@ -38,33 +38,76 @@ void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoReq
 	delete echoResponse;
 }
 
+void handle_SessionStartRequest(const int newsockfd, const escrow::SessionStartRequest * sessionStartRequest) {
+	// TODO log session
+	std::stringstream logmsg;
+	char s_client_id[37];
+	uuid_t client_id;
+	sessionStartRequest->client_id().copy((char *)client_id, 16);
+	uuid_unparse(client_id, s_client_id);
+	logmsg << "Got connection from: " << s_client_id << std::endl;
+	info(logmsg.str().c_str());
+	
+	escrow::SessionStartResponse * sessionStartResponse = new escrow::SessionStartResponse();
+	sessionStartResponse->set_client_id(client_id, sizeof(uuid_t));
+	uuid_t session_id;
+	uuid_generate(session_id);
+	sessionStartResponse->set_session_id(session_id, sizeof(uuid_t));
+	sessionStartResponse->set_error(escrow::SessionStartError::OK);
+	
+	socket_write_message(newsockfd, MSG_ID_SESSIONSTARTRESPONSE, sessionStartResponse);
+	
+	delete sessionStartResponse;
+}
+
 void process(int newsockfd) {
 	char buffer[BUFFER_SIZE];
-	int n, rc;
-	sqlite3 *db;
+	int n;
+	sqlite3 * db;
+	struct pollfd sds;
 	
-	n = read(newsockfd, buffer, BUFFER_SIZE);
-	if (n < 0) {
-		error("ERROR reading from socket");
-	}
+	open_database(db);
 	
-	message_dispatch(buffer, n, [newsockfd](int message_id, google::protobuf::MessageLite * message) {
-		switch (message_id) {
-			case MSG_ID_ECHOREQUEST:
-				handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
-				break;
-			default:
-				error("ERROR unhandled message");
-				break;
-		}
-	});
+	while (1) {
+		sds.fd = newsockfd;
+		sds.events = POLLIN | POLLPRI | POLLHUP;
+		sds.revents = 0;
 		
-	/*rc = sqlite3_open("test.db", &db);
-	if (rc) {
-		sqlite3_close(db);
-		error("ERROR can't open db");
+		if (poll(&sds, 1, 100) == 1) {
+			if (sds.revents & POLLHUP) {
+				break;
+			} else if (sds.revents & POLLPRI) {
+				n = recv(newsockfd, buffer, BUFFER_SIZE, MSG_OOB);
+			} else {
+				n = recv(newsockfd, buffer, BUFFER_SIZE, 0);
+			}
+
+			if (n == 0) {
+				break;
+			}
+			
+			if (n < 0) {
+				error("ERROR reading from socket");
+			}
+		
+			message_dispatch(buffer, n, [newsockfd, db](int message_id, google::protobuf::MessageLite * message) {
+				switch (message_id) {
+					case MSG_ID_ECHOREQUEST:
+						handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
+						break;
+					case MSG_ID_SESSIONSTARTREQUEST:
+						handle_SessionStartRequest(newsockfd, (escrow::SessionStartRequest *)message);
+						break;
+					default:
+						error("ERROR unhandled message");
+						break;
+				}
+			});
+		}
 	}
-	sqlite3_close(db);*/
+	
+	info("Client disconnected, shutting down");
+	sqlite3_close(db);
 	
 	close(newsockfd);
 }
@@ -122,13 +165,17 @@ int main(int argc, char **argv) {
 			/* This is the client process */
 			close(sockfd);
 			process(newsockfd);
-			exit(0);
+			break;
 		} else {
 			close(newsockfd);
 		}
 	} /* end of while */
-		
-	close(sockfd);
+
+	if (pid == 0) {
+		shutdown(sockfd, SHUT_RDWR);
+	} else {
+		shutdown(newsockfd, SHUT_RDWR);
+	}
 	google::protobuf::ShutdownProtobufLibrary();
 	return 0; 
 }
