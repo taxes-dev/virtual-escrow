@@ -15,13 +15,38 @@
 #include "session.pb.h"
 #include "shared.h"
 
+static int db_callback(void * notUsed, int argc, char **argv, char **colName) {
+	for (int i = 0; i < argc; i++) {
+		std::cout << colName[i] << " = " << (argv[i] ? argv[i] : "NULL") << std::endl;
+	}
+	return 0;
+}
 
-void open_database(sqlite3 * db) {
-	int rc = sqlite3_open("virtualescrow.db", &db);
+void exec_database(sqlite3 * db, const char * command) {
+	char *errmsg = 0;
+	int rc = sqlite3_exec(db, command, db_callback, 0, &errmsg);
+	if (rc != SQLITE_OK) {
+		error(errmsg);
+		sqlite3_free(errmsg);
+	}
+}
+
+void open_database(sqlite3 ** db) {
+	std::stringstream query;
+	
+	// open database
+	int rc = sqlite3_open("virtualescrow.db", db);
 	if (rc) {
-		sqlite3_close(db);
+		sqlite3_close(*db);
 		error("ERROR can't open db");
 	}
+	
+	// create schema if it doesn't exist
+	query << "CREATE TABLE IF NOT EXISTS sessions (client_id TEXT UNIQUE, session_id TEXT);"
+		<< std::endl;
+	
+	exec_database(*db, query.str().c_str());
+	std::cout << "DB " << *db << std::endl;
 }
 
 void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoRequest) {
@@ -38,22 +63,27 @@ void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoReq
 	delete echoResponse;
 }
 
-void handle_SessionStartRequest(const int newsockfd, const escrow::SessionStartRequest * sessionStartRequest) {
-	// TODO log session
-	std::stringstream logmsg;
-	char s_client_id[37];
-	uuid_t client_id;
-	sessionStartRequest->client_id().copy((char *)client_id, 16);
+void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow::SessionStartRequest * sessionStartRequest) {
+	uuid_t client_id, session_id;
+	std::stringstream logmsg, query;
+	char s_client_id[37], s_session_id[37];
+	
+	sessionStartRequest->client_id().copy((char *)client_id, sizeof(uuid_t));
 	uuid_unparse(client_id, s_client_id);
 	logmsg << "Got connection from: " << s_client_id << std::endl;
 	info(logmsg.str().c_str());
 	
 	escrow::SessionStartResponse * sessionStartResponse = new escrow::SessionStartResponse();
 	sessionStartResponse->set_client_id(client_id, sizeof(uuid_t));
-	uuid_t session_id;
 	uuid_generate(session_id);
+	uuid_unparse(session_id, s_session_id);
 	sessionStartResponse->set_session_id(session_id, sizeof(uuid_t));
 	sessionStartResponse->set_error(escrow::SessionStartError::OK);
+	
+	std::cout << "DB " << db << std::endl;
+	query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
+	info(query.str().c_str());
+	exec_database(db, query.str().c_str());
 	
 	socket_write_message(newsockfd, MSG_ID_SESSIONSTARTRESPONSE, sessionStartResponse);
 	
@@ -66,7 +96,7 @@ void process(int newsockfd) {
 	sqlite3 * db;
 	struct pollfd sds;
 	
-	open_database(db);
+	open_database(&db);
 	
 	while (1) {
 		sds.fd = newsockfd;
@@ -96,7 +126,7 @@ void process(int newsockfd) {
 						handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
 						break;
 					case MSG_ID_SESSIONSTARTREQUEST:
-						handle_SessionStartRequest(newsockfd, (escrow::SessionStartRequest *)message);
+						handle_SessionStartRequest(newsockfd, db, (escrow::SessionStartRequest *)message);
 						break;
 					default:
 						error("ERROR unhandled message");
