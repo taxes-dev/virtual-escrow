@@ -15,16 +15,17 @@
 #include "session.pb.h"
 #include "messageformat.h"
 #include "shared.h"
+#include "virtualitems.h"
 
 uuid_t g_client_id;
 bool g_session_set = false;
 uuid_t g_session_id;
+escrow::Inventory * g_inventory;
 
 
 void cmd_EchoRequest(const int sockfd) {
 	std::cout << "Please enter the message: " << std::endl;
 	std::string input;
-	std::cin.ignore();
 	std::getline(std::cin, input);
 	
 	escrow::EchoRequest * echoRequest = new escrow::EchoRequest();
@@ -105,12 +106,39 @@ bool process_message(const int sockfd, bool wait) {
 	return true;
 }
 
+void show_inventory() {
+	escrow::Inventory::iterator iter;
+	int i = 1;
+	char s_uuid_tmp[UUID_STR_SIZE];
+	uuid_t uuid_tmp, uuid_tmp2;
+	
+	std::cout << "Current inventory:" << std::endl;
+	for (iter = g_inventory->begin(); iter < g_inventory->end(); iter++, i++) {
+		escrow::VirtualItem * item = *iter;
+		
+		bzero(s_uuid_tmp, UUID_STR_SIZE);
+		bzero(uuid_tmp, sizeof(uuid_t));
+		bzero(uuid_tmp2, sizeof(uuid_t));
+		
+		item->instance_id().copy((char *)uuid_tmp, sizeof(uuid_t));
+		item->original_owner_id().copy((char *)uuid_tmp2, sizeof(uuid_t));
+		uuid_unparse(uuid_tmp, s_uuid_tmp);
+		
+		std::cout << i << ") " << item->desc() << " [instance " << s_uuid_tmp << "] [local: " << (
+			uuid_compare(g_client_id, uuid_tmp2) == 0 ? "Y" : "N"
+		) << "]" << std::endl;
+	}
+	std::cout << std::endl;
+}
+
 int char_if_ready() {
 	struct pollfd fds;
 	fds.fd = 0; /* STDIN */
 	fds.events = POLLIN;
 	if (poll(&fds, 1, 100) == 1) {
-		return std::getchar(); // only care about the first character
+		int c = std::getchar(); // only care about the first character
+		std::cin.ignore(); // discard any remaining chars up to the newline
+		return c;
 	}
 	return 0;
 }
@@ -119,11 +147,12 @@ void client_menu(const int sockfd) {
 	int c = 0;
 	while (c != 'q') {
 		c = 0;
-		std::cout << "Choose a message to send (select and press ENTER):\n1) echo\nq) quit" << std::endl;
+		std::cout << "Choose a message to send (select and press ENTER):\n1) echo\ni) display inventory\nq) quit" << std::endl;
 		while (c == 0) {
 			c = char_if_ready(); // times out after 100ms
 			switch (c) {
 				case '1': cmd_EchoRequest(sockfd); break;
+				case 'i': show_inventory(); break;
 			}
 			if (process_message(sockfd, false) == false) {
 				info("Lost connection, shutting down");
@@ -174,7 +203,11 @@ int main(int argc, char *argv[]) {
 	cmd_SessionStartRequest(sockfd, g_client_id);
 	process_message(sockfd, true); // block until we get a SessionStartResponse
 	if (g_session_set) {
+		g_inventory = new escrow::Inventory();
+		escrow::generate_random_inventory(g_inventory, 5, g_client_id);
 		client_menu(sockfd);
+		escrow::free_inventory_items(g_inventory);
+		delete g_inventory;
 	} else {
 		info("Client with this ID is already connected, disconnecting");
 	}

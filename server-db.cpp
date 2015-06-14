@@ -50,5 +50,5 @@ void open_database(sqlite3 ** db) {
 	query << "CREATE TABLE IF NOT EXISTS sessions (client_id TEXT UNIQUE, session_id TEXT);"
 	<< std::endl;
 	
-	exec_database(*db, query.str().c_str());
+	exec_database(*db, query.str());
 }
