@@ -57,7 +57,7 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 		// check for duplicate session
 		query << "SELECT session_id FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
 		DatabaseResults results;
-		exec_database_with_results(db, query.str().c_str(), &results);
+		exec_database_with_results(db, query.str(), &results);
 		if (results.size() > 0) {
 			// duplicate client
 			uuid_parse(results.back()["session_id"].c_str(), g_connected_session_id); 
@@ -73,7 +73,7 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 		
 			query.clear();
 			query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
-			exec_database(db, query.str().c_str());
+			exec_database(db, query.str());
 		}
 	}
 	
@@ -133,7 +133,7 @@ void process(int newsockfd) {
 	info("Client disconnected, shutting down");
 	uuid_unparse(g_connected_client_id, s_client_id);
 	query << "DELETE FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-	exec_database(db, query.str().c_str());
+	exec_database(db, query.str());
 	sqlite3_close(db);
 	
 	close(newsockfd);

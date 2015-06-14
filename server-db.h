@@ -4,12 +4,14 @@
 #include <vector>
 #include "sqlite-amalgamation-3081002/sqlite3.h"
 
+#define DB_NAME "virtualescrow.db"
+
 using DatabaseRow = std::map<std::string, std::string>;
 using DatabaseResults = std::vector<DatabaseRow>;
 
-void exec_database(sqlite3 * db, const char * command);
+void exec_database(sqlite3 * db, const std::string command);
 
-void exec_database_with_results(sqlite3 * db, const char * command, DatabaseResults * results);
+void exec_database_with_results(sqlite3 * db, const std::string command, DatabaseResults * results);
 
 void open_database(sqlite3 ** db);
 
