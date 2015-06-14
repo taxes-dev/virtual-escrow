@@ -19,7 +19,7 @@ target_include_directories(ve-server PUBLIC ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLU
 # Client executable
 add_executable(ve-client client.cpp shared.cpp virtualitems.cpp ${PROTO_SRCS})
 target_compile_options(ve-client PUBLIC "-std=c++11")
-target_link_libraries(ve-client SQLITE pthread dl uuid ${PROTOBUF_LIBRARIES})
+target_link_libraries(ve-client uuid ${PROTOBUF_LIBRARIES})
 target_include_directories(ve-client PUBLIC ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLUDE_DIRS})
 
 # Install binaries
