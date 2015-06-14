@@ -9,6 +9,10 @@
 using DatabaseRow = std::map<std::string, std::string>;
 using DatabaseResults = std::vector<DatabaseRow>;
 
+void clean_database();
+
+void close_datbase(sqlite3 * db);
+
 void exec_database(sqlite3 * db, const std::string command);
 
 void exec_database_with_results(sqlite3 * db, const std::string command, DatabaseResults * results);

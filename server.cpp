@@ -13,12 +13,37 @@
 #include "sqlite-amalgamation-3081002/sqlite3.h"
 #include "echo.pb.h"
 #include "session.pb.h"
+#include "trade.pb.h"
 #include "shared.h"
 #include "server-db.h"
 
 bool g_connected = false;
 uuid_t g_connected_client_id;
 uuid_t g_connected_session_id;
+
+void handle_AvailableTradePartnersRequest(const int newsockfd, sqlite3 * db, const escrow::AvailableTradePartnersRequest * partnersRequest) {
+	std::stringstream query;
+	DatabaseResults results;
+	DatabaseResults::iterator iter;
+	uuid_t u_client_id;
+	char s_client_id[UUID_STR_SIZE];
+	escrow::AvailableTradePartnersResponse * partnersResponse = new escrow::AvailableTradePartnersResponse();
+	
+	uuid_unparse(g_connected_client_id, s_client_id);
+	query << "SELECT client_id FROM sessions WHERE client_id != '" << s_client_id << "';" << std::endl;
+	exec_database_with_results(db, query.str(), &results);
+	
+	for (iter = results.begin(); iter < results.end(); iter++) {
+		DatabaseRow row = *iter;
+		bzero((char *)u_client_id, sizeof(uuid_t));
+		uuid_parse(row["client_id"].c_str(), u_client_id);
+		partnersResponse->add_client_id((char *)u_client_id, sizeof(uuid_t));
+	}
+	
+	socket_write_message(newsockfd, MSG_ID_AVAILABLETRADEPARTNERSRESPONSE, partnersResponse);
+	
+	delete partnersResponse;
+}
 
 void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoRequest) {
 	std::stringstream logmsg;
@@ -71,7 +96,7 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 			sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
 			sessionStartResponse->set_error(escrow::SessionStartError::OK);
 		
-			query.clear();
+			query.str("");
 			query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
 			exec_database(db, query.str());
 		}
@@ -116,6 +141,9 @@ void process(int newsockfd) {
 		
 			message_dispatch(buffer, n, [newsockfd, db](int message_id, google::protobuf::MessageLite * message) {
 				switch (message_id) {
+					case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
+						handle_AvailableTradePartnersRequest(newsockfd, db, (escrow::AvailableTradePartnersRequest *)message);
+						break;
 					case MSG_ID_ECHOREQUEST:
 						handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
 						break;
@@ -134,7 +162,7 @@ void process(int newsockfd) {
 	uuid_unparse(g_connected_client_id, s_client_id);
 	query << "DELETE FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
 	exec_database(db, query.str());
-	sqlite3_close(db);
+	close_datbase(db);
 	
 	close(newsockfd);
 }
@@ -151,6 +179,8 @@ int main(int argc, char **argv) {
 	if (argc < 2) {
 		error("ERROR, no port provided");
 	}
+	
+	clean_database();
 	
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) { 

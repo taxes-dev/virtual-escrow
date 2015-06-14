@@ -1,0 +1,8 @@
+package escrow;
+
+message AvailableTradePartnersRequest {
+}
+
+message AvailableTradePartnersResponse {
+	repeated bytes client_id = 1;
+}

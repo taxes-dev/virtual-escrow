@@ -13,6 +13,7 @@
 #include <uuid/uuid.h>
 #include "echo.pb.h"
 #include "session.pb.h"
+#include "trade.pb.h"
 #include "messageformat.h"
 #include "shared.h"
 #include "virtualitems.h"
@@ -22,6 +23,11 @@ bool g_session_set = false;
 uuid_t g_session_id;
 escrow::Inventory * g_inventory;
 
+void cmd_AvailableTradePartnersRequest(const int sockfd) {
+	escrow::AvailableTradePartnersRequest * partnersRequest = new escrow::AvailableTradePartnersRequest();
+	socket_write_message(sockfd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, partnersRequest);
+	delete partnersRequest;
+}
 
 void cmd_EchoRequest(const int sockfd) {
 	std::cout << "Please enter the message: " << std::endl;
@@ -39,6 +45,29 @@ void cmd_SessionStartRequest(const int sockfd, const uuid_t client_id) {
 	sessionStartRequest->set_client_id(client_id, sizeof(uuid_t));
 	socket_write_message(sockfd, MSG_ID_SESSIONSTARTREQUEST, sessionStartRequest);
 	delete sessionStartRequest;
+}
+
+void handle_AvailableTradePartnersResponse(const escrow::AvailableTradePartnersResponse * partnersResponse) {
+	uuid_t u_client_id;
+	char s_client_id[UUID_STR_SIZE];
+	google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
+	
+	if (partnersResponse->client_id_size() > 0) {
+		for (iter = partnersResponse->client_id().begin(); iter < partnersResponse->client_id().end(); iter++) {
+			std::string client_id = *iter;
+			std::stringstream clientmsg;
+			
+			bzero((char *)u_client_id, sizeof(uuid_t));
+			bzero((char *)s_client_id, UUID_STR_SIZE);
+			client_id.copy((char *)u_client_id, sizeof(uuid_t));
+			uuid_unparse(u_client_id, s_client_id);
+			
+			clientmsg << "Available trade partner: " << s_client_id << std::endl;
+			info(clientmsg.str().c_str());
+		}
+	} else {
+		info("No available trade partners");
+	}
 }
 
 void handle_EchoResponse(const escrow::EchoResponse * echoResponse) {
@@ -87,13 +116,16 @@ bool process_message(const int sockfd, bool wait) {
 		}
 		
 		if (n > 0) {
-			message_dispatch(buffer, n, [sockfd](int message_id, google::protobuf::MessageLite * message) {
+			message_dispatch(buffer, n, [](int message_id, google::protobuf::MessageLite * message) {
 				switch (message_id) {
 					case MSG_ID_ECHORESPONSE:
 						handle_EchoResponse((escrow::EchoResponse *)message);
 						break;
 					case MSG_ID_SESSIONSTARTRESPONSE:
 						handle_SessionStartResponse((escrow::SessionStartResponse *)message);
+						break;
+					case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
+						handle_AvailableTradePartnersResponse((escrow::AvailableTradePartnersResponse *)message);
 						break;
 					default:
 						error("ERROR unhandled message");
@@ -147,11 +179,12 @@ void client_menu(const int sockfd) {
 	int c = 0;
 	while (c != 'q') {
 		c = 0;
-		std::cout << "Choose a message to send (select and press ENTER):\n1) echo\ni) display inventory\nq) quit" << std::endl;
+		std::cout << "Choose a message to send (select and press ENTER):\n1) echo\n2) available trade partners\ni) display inventory\nq) quit" << std::endl;
 		while (c == 0) {
 			c = char_if_ready(); // times out after 100ms
 			switch (c) {
 				case '1': cmd_EchoRequest(sockfd); break;
+				case '2': cmd_AvailableTradePartnersRequest(sockfd); break;
 				case 'i': show_inventory(); break;
 			}
 			if (process_message(sockfd, false) == false) {

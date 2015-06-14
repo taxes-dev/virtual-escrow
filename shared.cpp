@@ -5,6 +5,7 @@
 #include "shared.h"
 #include "echo.pb.h"
 #include "session.pb.h"
+#include "trade.pb.h"
 
 
 bool create_protobuf_from_wrapper(const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * protobuf) {
@@ -49,6 +50,12 @@ void message_dispatch(const char * buffer, const size_t buffer_size, const std::
 	
 	google::protobuf::MessageLite * message;
 	switch (requestFrame.message_id) {
+		case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
+			message = new escrow::AvailableTradePartnersRequest();
+			break;
+		case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
+			message = new escrow::AvailableTradePartnersResponse();
+			break;
 		case MSG_ID_ECHOREQUEST:
 			message = new escrow::EchoRequest();
 			break;

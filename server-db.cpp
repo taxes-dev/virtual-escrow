@@ -6,11 +6,15 @@
 #include "shared.h"
 #include "server-db.h"
 
+void close_datbase(sqlite3 * db) {
+	sqlite3_close(db);
+}
+
 static int db_callback(void * results, int argc, char **argv, char **colName) {
 	DatabaseRow row;
 	for (int i = 0; i < argc; i++) {
 		row[std::string(colName[i])] = argv[i] ? std::string(argv[i]) : nullptr;
-		std::cout << colName[i] << " = " << (argv[i] ? argv[i] : "NULL") << std::endl;
+		//std::cout << colName[i] << " = " << (argv[i] ? argv[i] : "NULL") << std::endl;
 	}
 	((DatabaseResults *)results)->push_back(row);
 	return 0;
@@ -51,4 +55,14 @@ void open_database(sqlite3 ** db) {
 	<< std::endl;
 	
 	exec_database(*db, query.str());
+}
+
+void clean_database() {
+	sqlite3 * db;
+	open_database(&db);
+	
+	// remove any sessions from previous runs
+	exec_database(db, "DELETE FROM sessions;");
+	
+	close_datbase(db);
 }
