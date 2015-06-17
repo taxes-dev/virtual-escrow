@@ -17,7 +17,7 @@ void error(const char *msg);
 
 void info(const char *msg);
 
-void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(int, google::protobuf::MessageLite *)> handler);
+void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(int, google::protobuf::MessageLite *)> & handler);
 
 void socket_write_message(const int sockfd, const int message_id, const google::protobuf::MessageLite * message);
 	

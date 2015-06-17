@@ -33,7 +33,7 @@ void handle_AvailableTradePartnersRequest(const int newsockfd, sqlite3 * db, con
 	query << "SELECT client_id FROM sessions WHERE client_id != '" << s_client_id << "';" << std::endl;
 	exec_database_with_results(db, query.str(), &results);
 	
-	for (iter = results.begin(); iter < results.end(); iter++) {
+	for (iter = results.begin(); iter < results.end(); ++iter) {
 		DatabaseRow row = *iter;
 		bzero((char *)u_client_id, sizeof(uuid_t));
 		uuid_parse(row["client_id"].c_str(), u_client_id);

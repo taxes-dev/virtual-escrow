@@ -42,7 +42,7 @@ void info(const char *msg) {
 	std::cout << "[" << pid << " INFO] " << msg << std::endl;
 }
 
-void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(int, google::protobuf::MessageLite *)> handler) {
+void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(int, google::protobuf::MessageLite *)> & handler) {
 	escrow::MessageWrapper requestFrame;
 	if (create_wrapper_from_buffer(buffer, buffer_size, &requestFrame) == false) {
 		error("ERROR copying buffer to request frame");

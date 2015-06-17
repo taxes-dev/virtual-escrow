@@ -53,7 +53,7 @@ void handle_AvailableTradePartnersResponse(const escrow::AvailableTradePartnersR
 	google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
 	
 	if (partnersResponse->client_id_size() > 0) {
-		for (iter = partnersResponse->client_id().begin(); iter < partnersResponse->client_id().end(); iter++) {
+		for (iter = partnersResponse->client_id().begin(); iter < partnersResponse->client_id().end(); ++iter) {
 			std::string client_id = *iter;
 			std::stringstream clientmsg;
 			
@@ -145,7 +145,7 @@ void show_inventory() {
 	uuid_t uuid_tmp, uuid_tmp2;
 	
 	std::cout << "Current inventory:" << std::endl;
-	for (iter = g_inventory->begin(); iter < g_inventory->end(); iter++, i++) {
+	for (iter = g_inventory->begin(); iter < g_inventory->end(); ++iter, ++i) {
 		escrow::VirtualItem * item = *iter;
 		
 		bzero(s_uuid_tmp, UUID_STR_SIZE);
@@ -196,7 +196,7 @@ void client_menu(const int sockfd) {
 }
 	
 int main(int argc, char *argv[]) {
-	int sockfd, portno, n;
+	int sockfd, portno;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
 	std::stringstream logmsg;
@@ -204,7 +204,6 @@ int main(int argc, char *argv[]) {
 	
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
-	char buffer[BUFFER_SIZE];
 	if (argc < 3) {
 		error("usage: ve-client hostname port");
 	}

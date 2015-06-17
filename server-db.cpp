@@ -20,7 +20,7 @@ static int db_callback(void * results, int argc, char **argv, char **colName) {
 	return 0;
 }
 
-void exec_database(sqlite3 * db, const std::string command) {
+void exec_database(sqlite3 * db, const std::string & command) {
 	char *errmsg = 0;
 	int rc = sqlite3_exec(db, command.c_str(), 0, 0, &errmsg);
 	if (rc != SQLITE_OK) {
@@ -29,7 +29,7 @@ void exec_database(sqlite3 * db, const std::string command) {
 	}
 }
 
-void exec_database_with_results(sqlite3 * db, const std::string command, DatabaseResults * results) {
+void exec_database_with_results(sqlite3 * db, const std::string & command, DatabaseResults * results) {
 	char *errmsg = 0;
 	
 	int rc = sqlite3_exec(db, command.c_str(), db_callback, results, &errmsg);
