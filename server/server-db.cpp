@@ -3,8 +3,8 @@
 #include <sstream>
 #include <vector>
 #include "sqlite-amalgamation-3081002/sqlite3.h"
-#include "shared.h"
-#include "server-db.h"
+#include "shared/shared.h"
+#include "server/server-db.h"
 
 void close_datbase(sqlite3 * db) {
 	sqlite3_close(db);

@@ -14,9 +14,9 @@
 #include "echo.pb.h"
 #include "session.pb.h"
 #include "trade.pb.h"
-#include "messageformat.h"
-#include "shared.h"
-#include "virtualitems.h"
+#include "shared/messageformat.h"
+#include "shared/shared.h"
+#include "shared/virtualitems.h"
 
 uuid_t g_client_id;
 bool g_session_set = false;

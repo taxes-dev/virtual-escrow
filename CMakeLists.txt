@@ -7,20 +7,26 @@ find_package(Protobuf 2.6.1 REQUIRED)
 file(GLOB PROTO_FILES "${CMAKE_CURRENT_SOURCE_DIR}/protos/*.proto")
 PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 
-# SQLite dependency
-add_library(SQLITE sqlite-amalgamation-3081002/sqlite3.c)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLUDE_DIRS})
+add_definitions("-std=c++11")
+
+# Dependencies
+add_subdirectory(sqlite-amalgamation-3081002)
+add_subdirectory(server)
+add_subdirectory(shared)
+
+add_library(GENPROTOLIB ${PROTO_SRCS})
+target_compile_options(GENPROTOLIB PUBLIC "-std=c++11")
 
 # Server executable
-add_executable(ve-server server.cpp shared.cpp server-db.cpp ${PROTO_SRCS})
+add_executable(ve-server server.cpp)
 target_compile_options(ve-server PUBLIC "-std=c++11")
-target_link_libraries(ve-server SQLITE pthread dl uuid ${PROTOBUF_LIBRARIES})
-target_include_directories(ve-server PUBLIC ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLUDE_DIRS})
+target_link_libraries(ve-server GENPROTOLIB SERVERLIB SHAREDLIB SQLITE pthread dl uuid ${PROTOBUF_LIBRARIES})
 
 # Client executable
-add_executable(ve-client client.cpp shared.cpp virtualitems.cpp ${PROTO_SRCS})
+add_executable(ve-client client.cpp)
 target_compile_options(ve-client PUBLIC "-std=c++11")
-target_link_libraries(ve-client uuid ${PROTOBUF_LIBRARIES})
-target_include_directories(ve-client PUBLIC ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLUDE_DIRS})
+target_link_libraries(ve-client GENPROTOLIB SHAREDLIB uuid ${PROTOBUF_LIBRARIES})
 
 # Install binaries
 install(TARGETS ve-server ve-client RUNTIME DESTINATION bin)

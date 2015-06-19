@@ -2,7 +2,7 @@
 #include <random>
 #include <string>
 #include <uuid/uuid.h>
-#include "virtualitems.h"
+#include "shared/virtualitems.h"
 
 namespace escrow {
 	using namespace std;

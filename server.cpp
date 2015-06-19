@@ -14,8 +14,8 @@
 #include "echo.pb.h"
 #include "session.pb.h"
 #include "trade.pb.h"
-#include "shared.h"
-#include "server-db.h"
+#include "shared/shared.h"
+#include "server/server-db.h"
 
 bool g_connected = false;
 uuid_t g_connected_client_id;
