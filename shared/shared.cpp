@@ -6,6 +6,7 @@
 #include "echo.pb.h"
 #include "session.pb.h"
 #include "trade.pb.h"
+#include "shared/messageformat.h"
 
 
 bool create_protobuf_from_wrapper(const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * protobuf) {
@@ -18,9 +19,9 @@ bool create_wrapper_from_buffer(const char * buffer, const size_t buffer_size, e
 }
 
 bool create_wrapper_from_protobuf(const google::protobuf::MessageLite * protobuf, const int message_id, escrow::MessageWrapper * wrapper) {
-	char buffer[BUFFER_SIZE];
+	char buffer[MESSAGE_BUFFER_SIZE];
 	
-	if (protobuf->SerializeToArray(buffer, BUFFER_SIZE) == false) {
+	if (protobuf->SerializeToArray(buffer, MESSAGE_BUFFER_SIZE) == false) {
 		return false;
 	}
 

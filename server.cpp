@@ -108,7 +108,7 @@ void handle_SessionStartRequest(const int newsockfd, const escrow::ServerDatabas
 }
 
 void process(int newsockfd) {
-	char buffer[BUFFER_SIZE];
+	char buffer[MESSAGE_BUFFER_SIZE];
 	int n;
 	escrow::ServerDatabase db;
 	struct pollfd sds;
@@ -126,9 +126,9 @@ void process(int newsockfd) {
 			if (sds.revents & POLLHUP) {
 				break;
 			} else if (sds.revents & POLLPRI) {
-				n = recv(newsockfd, buffer, BUFFER_SIZE, MSG_OOB);
+				n = recv(newsockfd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
 			} else {
-				n = recv(newsockfd, buffer, BUFFER_SIZE, 0);
+				n = recv(newsockfd, buffer, MESSAGE_BUFFER_SIZE, 0);
 			}
 
 			if (n == 0) {

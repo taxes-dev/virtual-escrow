@@ -3,7 +3,8 @@
 
 #include <functional>
 
-#define MESSAGE_MAX_BODY_SIZE (1024 - sizeof(int) - sizeof(int))
+#define MESSAGE_BUFFER_SIZE 1024
+#define MESSAGE_MAX_BODY_SIZE (MESSAGE_BUFFER_SIZE - sizeof(int) - sizeof(int))
 
 namespace escrow {
 	typedef struct s_MessageWrapper {

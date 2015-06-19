@@ -92,7 +92,7 @@ void handle_SessionStartResponse(const escrow::SessionStartResponse * sessionSta
 
 bool process_message(const int sockfd, bool wait) {
 	struct pollfd sds;
-	char buffer[BUFFER_SIZE];
+	char buffer[MESSAGE_BUFFER_SIZE];
 	int n = 0;
 	
 	sds.fd = sockfd;
@@ -102,9 +102,9 @@ bool process_message(const int sockfd, bool wait) {
 		if (sds.revents & POLLHUP) {
 			return false;
 		} else if (sds.revents & POLLPRI) {
-			n = recv(sockfd, buffer, BUFFER_SIZE, MSG_OOB);
+			n = recv(sockfd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
 		} else {
-			n = recv(sockfd, buffer, BUFFER_SIZE, 0);
+			n = recv(sockfd, buffer, MESSAGE_BUFFER_SIZE, 0);
 		}
 		
 		if (n == 0) {
