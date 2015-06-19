@@ -6,17 +6,24 @@
 
 #define DB_NAME "virtualescrow.db"
 
-using DatabaseRow = std::map<std::string, std::string>;
-using DatabaseResults = std::vector<DatabaseRow>;
+namespace escrow {
+	using DatabaseRow = std::map<std::string, std::string>;
+	using DatabaseResults = std::vector<DatabaseRow>;
 
-void clean_database();
+	class ServerDatabase {
+	public:
+	static void clean();
 
-void close_datbase(sqlite3 * db);
+	void close();
 
-void exec_database(sqlite3 * db, const std::string & command);
+	void exec(const std::string & command) const;
 
-void exec_database_with_results(sqlite3 * db, const std::string & command, DatabaseResults * results);
+	void exec_with_results(const std::string & command, DatabaseResults * results) const;
 
-void open_database(sqlite3 ** db);
-
+	void open();
+	
+	private:
+		sqlite3 * m_db;
+	};
+}
 #endif

@@ -21,20 +21,20 @@ bool g_connected = false;
 uuid_t g_connected_client_id;
 uuid_t g_connected_session_id;
 
-void handle_AvailableTradePartnersRequest(const int newsockfd, sqlite3 * db, const escrow::AvailableTradePartnersRequest * partnersRequest) {
+void handle_AvailableTradePartnersRequest(const int newsockfd, const escrow::ServerDatabase * db, const escrow::AvailableTradePartnersRequest * partnersRequest) {
 	std::stringstream query;
-	DatabaseResults results;
-	DatabaseResults::iterator iter;
+	escrow::DatabaseResults results;
+	escrow::DatabaseResults::iterator iter;
 	uuid_t u_client_id;
 	char s_client_id[UUID_STR_SIZE];
 	escrow::AvailableTradePartnersResponse * partnersResponse = new escrow::AvailableTradePartnersResponse();
 	
 	uuid_unparse(g_connected_client_id, s_client_id);
 	query << "SELECT client_id FROM sessions WHERE client_id != '" << s_client_id << "';" << std::endl;
-	exec_database_with_results(db, query.str(), &results);
+	db->exec_with_results(query.str(), &results);
 	
 	for (iter = results.begin(); iter < results.end(); ++iter) {
-		DatabaseRow row = *iter;
+		escrow::DatabaseRow row = *iter;
 		bzero((char *)u_client_id, sizeof(uuid_t));
 		uuid_parse(row["client_id"].c_str(), u_client_id);
 		partnersResponse->add_client_id((char *)u_client_id, sizeof(uuid_t));
@@ -59,7 +59,7 @@ void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoReq
 	delete echoResponse;
 }
 
-void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow::SessionStartRequest * sessionStartRequest) {
+void handle_SessionStartRequest(const int newsockfd, const escrow::ServerDatabase * db, const escrow::SessionStartRequest * sessionStartRequest) {
 	std::stringstream logmsg, query;
 	char s_client_id[UUID_STR_SIZE], s_session_id[UUID_STR_SIZE];
 	escrow::SessionStartResponse * sessionStartResponse = new escrow::SessionStartResponse();
@@ -81,8 +81,8 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 		
 		// check for duplicate session
 		query << "SELECT session_id FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-		DatabaseResults results;
-		exec_database_with_results(db, query.str(), &results);
+		escrow::DatabaseResults results;
+		db->exec_with_results(query.str(), &results);
 		if (results.size() > 0) {
 			// duplicate client
 			uuid_parse(results.back()["session_id"].c_str(), g_connected_session_id); 
@@ -98,7 +98,7 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 		
 			query.str("");
 			query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
-			exec_database(db, query.str());
+			db->exec(query.str());
 		}
 	}
 	
@@ -110,12 +110,12 @@ void handle_SessionStartRequest(const int newsockfd, sqlite3 * db, const escrow:
 void process(int newsockfd) {
 	char buffer[BUFFER_SIZE];
 	int n;
-	sqlite3 * db;
+	escrow::ServerDatabase db;
 	struct pollfd sds;
 	std::stringstream query;
 	char s_client_id[UUID_STR_SIZE];
 	
-	open_database(&db);
+	db.open();
 	
 	while (1) {
 		sds.fd = newsockfd;
@@ -142,13 +142,13 @@ void process(int newsockfd) {
 			message_dispatch(buffer, n, [newsockfd, db](int message_id, google::protobuf::MessageLite * message) {
 				switch (message_id) {
 					case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-						handle_AvailableTradePartnersRequest(newsockfd, db, (escrow::AvailableTradePartnersRequest *)message);
+						handle_AvailableTradePartnersRequest(newsockfd, &db, (escrow::AvailableTradePartnersRequest *)message);
 						break;
 					case MSG_ID_ECHOREQUEST:
 						handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
 						break;
 					case MSG_ID_SESSIONSTARTREQUEST:
-						handle_SessionStartRequest(newsockfd, db, (escrow::SessionStartRequest *)message);
+						handle_SessionStartRequest(newsockfd, &db, (escrow::SessionStartRequest *)message);
 						break;
 					default:
 						error("ERROR unhandled message");
@@ -161,8 +161,8 @@ void process(int newsockfd) {
 	info("Client disconnected, shutting down");
 	uuid_unparse(g_connected_client_id, s_client_id);
 	query << "DELETE FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-	exec_database(db, query.str());
-	close_datbase(db);
+	db.exec(query.str());
+	db.close();
 	
 	close(newsockfd);
 }
@@ -180,7 +180,7 @@ int main(int argc, char **argv) {
 		error("ERROR, no port provided");
 	}
 	
-	clean_database();
+	escrow::ServerDatabase::clean();
 	
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) { 
