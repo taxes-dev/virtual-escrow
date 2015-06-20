@@ -19,9 +19,8 @@ namespace escrow {
 		ServerDatabase * db;
 		int m_sock_fd;
 		
-		void handle_AvailableTradePartnersRequest(const AvailableTradePartnersRequest * partnersRequest);
-		void handle_EchoRequest(const EchoRequest * echoRequest);
-		void handle_SessionStartRequest(const SessionStartRequest * sessionStartRequest);
+		template <typename T>
+		void handle(const T * message) { };
 	};
 }
 

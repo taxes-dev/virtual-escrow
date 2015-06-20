@@ -14,7 +14,7 @@
 namespace escrow {
 	using namespace std;
 	
-	void ServerProcess::handle_AvailableTradePartnersRequest(const AvailableTradePartnersRequest * partnersRequest) {
+	template<> void ServerProcess::handle(const AvailableTradePartnersRequest * partnersRequest) {
 		stringstream query;
 		DatabaseResults results;
 		DatabaseResults::iterator iter;
@@ -40,7 +40,7 @@ namespace escrow {
 		delete partnersResponse;
 	}
 	
-	void ServerProcess::handle_EchoRequest(const EchoRequest * echoRequest) {
+	template<> void ServerProcess::handle(const EchoRequest * echoRequest) {
 		stringstream logmsg;
 		
 		logmsg << "Here is the message: " << echoRequest->message() << std::endl; 
@@ -54,7 +54,7 @@ namespace escrow {
 		delete echoResponse;
 	}
 	
-	void ServerProcess::handle_SessionStartRequest(const SessionStartRequest * sessionStartRequest) {
+	template<> void ServerProcess::handle(const SessionStartRequest * sessionStartRequest) {
 		stringstream logmsg, query;
 		char s_client_id[UUID_STR_SIZE], s_session_id[UUID_STR_SIZE];
 		SessionStartResponse * sessionStartResponse = new SessionStartResponse();
@@ -137,13 +137,13 @@ namespace escrow {
 				message_dispatch(buffer, n, [this](int message_id, google::protobuf::MessageLite * message) {
 					switch (message_id) {
 						case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-							this->handle_AvailableTradePartnersRequest((escrow::AvailableTradePartnersRequest *)message);
+							this->handle((escrow::AvailableTradePartnersRequest *)message);
 							break;
 						case MSG_ID_ECHOREQUEST:
-							this->handle_EchoRequest((escrow::EchoRequest *)message);
+							this->handle((escrow::EchoRequest *)message);
 							break;
 						case MSG_ID_SESSIONSTARTREQUEST:
-							this->handle_SessionStartRequest((escrow::SessionStartRequest *)message);
+							this->handle((escrow::SessionStartRequest *)message);
 							break;
 						default:
 							error("ERROR unhandled message");
