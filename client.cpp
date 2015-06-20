@@ -39,7 +39,15 @@ void client_menu(escrow::ClientProcess & process) {
 		while (c == 0) {
 			c = char_if_ready(); // times out after 100ms
 			switch (c) {
-				case '1': process.cmd_EchoRequest(); break;
+				case '1':
+				{
+					std::cout << "Please enter the message: " << std::endl;
+					std::string input;
+					std::getline(std::cin, input);
+					
+					process.cmd_EchoRequest(input);
+					break;
+				}
 				case '2': process.cmd_AvailableTradePartnersRequest(); break;
 				case 'i': process.show_inventory(); break;
 			}

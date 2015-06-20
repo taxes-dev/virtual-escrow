@@ -40,31 +40,7 @@ namespace escrow {
 		uuid_unparse(this->m_owner_id, s_tmp_uuid);
 		this->m_str_owner_id = string(s_tmp_uuid, UUID_STR_SIZE);
 	}
-
-	string VirtualItem::desc() {
-		return this->m_desc;
-	}
-
-	void VirtualItem::copy_instance_id(uuid_t * dst) {
-		uuid_copy(*dst, this->m_instance_id);
-	}
 	
-	string VirtualItem::instance_id_parsed() {
-		return this->m_str_instance_id;
-	}
-
-	int VirtualItem::item_id() {
-		return this->m_item_id;
-	}
-	
-	void VirtualItem::copy_original_owner_id(uuid_t * dst) {
-		uuid_copy(*dst, this->m_owner_id);
-	}
-	
-	string VirtualItem::original_owner_id_parsed() {
-		return this->m_str_owner_id;
-	}
-
 	void generate_random_inventory(Inventory * inventory, const int size, const uuid_t owner) {
 		if (size > 0) {
 			default_random_engine generator;

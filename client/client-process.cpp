@@ -38,13 +38,9 @@ namespace escrow {
 		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, &partnersRequest);
 	}
 
-	void ClientProcess::cmd_EchoRequest() {
-		std::cout << "Please enter the message: " << std::endl;
-		std::string input;
-		std::getline(std::cin, input);
-		
+	void ClientProcess::cmd_EchoRequest(string & message) {
 		escrow::EchoRequest echoRequest;
-		echoRequest.set_message(input);
+		echoRequest.set_message(message);
 		socket_write_message(this->m_sock_fd, MSG_ID_ECHOREQUEST, &echoRequest);
 	}
 
@@ -54,7 +50,7 @@ namespace escrow {
 		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTREQUEST, &sessionStartRequest);
 	}
 
-	void ClientProcess::handle_AvailableTradePartnersResponse(const escrow::AvailableTradePartnersResponse * partnersResponse) {
+	template<> void ClientProcess::handle(const escrow::AvailableTradePartnersResponse * partnersResponse) {
 		uuid_t u_client_id;
 		char s_client_id[UUID_STR_SIZE];
 		google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
@@ -77,13 +73,13 @@ namespace escrow {
 		}
 	}
 
-	void ClientProcess::handle_EchoResponse(const escrow::EchoResponse * echoResponse) {
+	template<> void ClientProcess::handle(const escrow::EchoResponse * echoResponse) {
 		std::stringstream logmsg;
 		logmsg << "Got response: " << echoResponse->message() << std::endl;
 		info(logmsg.str().c_str());
 	}
 
-	void ClientProcess::handle_SessionStartResponse(const escrow::SessionStartResponse * sessionStartResponse) {
+	template<> void ClientProcess::handle(const escrow::SessionStartResponse * sessionStartResponse) {
 		switch (sessionStartResponse->error()) {
 			case SessionStartError::OK:
 				sessionStartResponse->session_id().copy((char *)this->m_session_id, sizeof(uuid_t));
@@ -127,13 +123,13 @@ namespace escrow {
 				message_dispatch(buffer, n, [this](int message_id, google::protobuf::MessageLite * message) {
 					switch (message_id) {
 						case MSG_ID_ECHORESPONSE:
-							this->handle_EchoResponse((escrow::EchoResponse *)message);
+							this->handle((escrow::EchoResponse *)message);
 							break;
 						case MSG_ID_SESSIONSTARTRESPONSE:
-							this->handle_SessionStartResponse((escrow::SessionStartResponse *)message);
+							this->handle((escrow::SessionStartResponse *)message);
 							break;
 						case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
-							this->handle_AvailableTradePartnersResponse((escrow::AvailableTradePartnersResponse *)message);
+							this->handle((escrow::AvailableTradePartnersResponse *)message);
 							break;
 						default:
 							error("ERROR unhandled message");

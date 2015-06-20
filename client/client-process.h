@@ -21,8 +21,7 @@ namespace escrow {
 		bool start_session();
 
 		void cmd_AvailableTradePartnersRequest();
-		void cmd_EchoRequest();
-		void cmd_SessionStartRequest();
+		void cmd_EchoRequest(string & message);
 	private:
 		int m_sock_fd;
 		uuid_t m_client_id;
@@ -30,10 +29,11 @@ namespace escrow {
 		bool m_session_set = false;
 		uuid_t m_session_id;
 		Inventory * m_inventory;
+
+		void cmd_SessionStartRequest();
 		
-		void handle_AvailableTradePartnersResponse(const escrow::AvailableTradePartnersResponse * partnersResponse);
-		void handle_EchoResponse(const escrow::EchoResponse * echoResponse);
-		void handle_SessionStartResponse(const escrow::SessionStartResponse * sessionStartResponse);
+		template <typename T>
+		void handle(const T * message) { };
 	};
 }
 
