@@ -5,6 +5,7 @@
 #include "session.pb.h"
 #include "trade.pb.h"
 #include "server/server-db.h"
+#include "shared/shared.h"
 
 namespace escrow {
 
@@ -15,12 +16,16 @@ namespace escrow {
 	private:
 		bool m_connected = false;
 		uuid_t m_client_id;
+		char m_str_client_id[UUID_STR_SIZE];
 		uuid_t m_session_id;
+		char m_str_session_id[UUID_STR_SIZE];
 		ServerDatabase * db;
 		int m_sock_fd;
 		
 		template <typename T>
 		void handle(const T * message) { };
+		void set_client_id(const std::string & client_id);
+		void start_session();
 	};
 }
 

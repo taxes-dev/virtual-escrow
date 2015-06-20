@@ -55,8 +55,6 @@ namespace escrow {
 	}
 	
 	template<> void ServerProcess::handle(const SessionStartRequest * sessionStartRequest) {
-		stringstream logmsg, query;
-		char s_client_id[UUID_STR_SIZE], s_session_id[UUID_STR_SIZE];
 		SessionStartResponse * sessionStartResponse = new SessionStartResponse();
 		
 		// message out of order?
@@ -65,34 +63,36 @@ namespace escrow {
 			sessionStartResponse->set_session_id(this->m_session_id, sizeof(uuid_t));
 			sessionStartResponse->set_error(SessionStartError::SESSION_STARTED);
 		} else {
+			stringstream logmsg, query;
+			DatabaseResults results;
+			
 			// get client ID from message
-			sessionStartRequest->client_id().copy((char *)this->m_client_id, sizeof(uuid_t));
-			uuid_unparse(this->m_client_id, s_client_id);
-			logmsg << "Got connection from: " << s_client_id << std::endl;
+			this->set_client_id(sessionStartRequest->client_id());
+			
+			logmsg << "Got connection from: " << this->m_str_client_id << std::endl;
 			info(logmsg.str().c_str());
 			
 			// create response
 			sessionStartResponse->set_client_id(this->m_client_id, sizeof(uuid_t));
 			
 			// check for duplicate session
-			query << "SELECT session_id FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-			DatabaseResults results;
+			query << "SELECT session_id FROM sessions WHERE client_id = '" << this->m_str_client_id << "';" << std::endl;
+			
 			this->db->exec_with_results(query.str(), &results);
 			if (results.size() > 0) {
 				// duplicate client
-				uuid_parse(results.back()["session_id"].c_str(), this->m_session_id); 
-				sessionStartResponse->set_session_id(this->m_session_id, sizeof(uuid_t));
+				uuid_t t_session_id;
+				uuid_parse(results.back()["session_id"].c_str(), t_session_id); 
+				sessionStartResponse->set_session_id(t_session_id, sizeof(uuid_t));
 				sessionStartResponse->set_error(SessionStartError::CLIENT_ALREADY_CONNECTED);
 			} else {
 				// generate new session id and record
-				uuid_generate(this->m_session_id);
-				this->m_connected = true;
-				uuid_unparse(this->m_session_id, s_session_id);
+				this->start_session();
 				sessionStartResponse->set_session_id(this->m_session_id, sizeof(uuid_t));
 				sessionStartResponse->set_error(SessionStartError::OK);
 				
 				query.str("");
-				query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
+				query << "INSERT INTO sessions VALUES ('" << this->m_str_client_id << "', '" << this->m_str_session_id << "');" << std::endl;
 				this->db->exec(query.str());
 			}
 		}
@@ -102,12 +102,27 @@ namespace escrow {
 		delete sessionStartResponse;
 	}
 	
+	void ServerProcess::set_client_id(const string & client_id)
+	{
+		if (this->m_connected == false) {
+			client_id.copy((char *)this->m_client_id, sizeof(uuid_t));
+			uuid_unparse(this->m_client_id, this->m_str_client_id);
+		}
+	}
+
+	void ServerProcess::start_session()
+	{
+		if (this->m_connected == false) {
+			uuid_generate(this->m_session_id);
+			this->m_connected = true;
+			uuid_unparse(this->m_session_id, this->m_str_session_id);
+		}
+	}
+	
 	void ServerProcess::process() {
 		char buffer[MESSAGE_BUFFER_SIZE];
 		int n;
 		struct pollfd sds;
-		std::stringstream query;
-		char s_client_id[UUID_STR_SIZE];
 		
 		this->db = new ServerDatabase();
 		this->db->open();
@@ -121,8 +136,10 @@ namespace escrow {
 				if (sds.revents & POLLHUP) {
 					break;
 				} else if (sds.revents & POLLPRI) {
+					bzero(buffer, MESSAGE_BUFFER_SIZE);
 					n = recv(this->m_sock_fd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
 				} else {
+					bzero(buffer, MESSAGE_BUFFER_SIZE);
 					n = recv(this->m_sock_fd, buffer, MESSAGE_BUFFER_SIZE, 0);
 				}
 				
@@ -137,13 +154,13 @@ namespace escrow {
 				message_dispatch(buffer, n, [this](int message_id, google::protobuf::MessageLite * message) {
 					switch (message_id) {
 						case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-							this->handle((escrow::AvailableTradePartnersRequest *)message);
+							this->handle(static_cast<AvailableTradePartnersRequest *>(message));
 							break;
 						case MSG_ID_ECHOREQUEST:
-							this->handle((escrow::EchoRequest *)message);
+							this->handle(static_cast<EchoRequest *>(message));
 							break;
 						case MSG_ID_SESSIONSTARTREQUEST:
-							this->handle((escrow::SessionStartRequest *)message);
+							this->handle(static_cast<SessionStartRequest *>(message));
 							break;
 						default:
 							error("ERROR unhandled message");
@@ -154,10 +171,12 @@ namespace escrow {
 		}
 		
 		info("Client disconnected, shutting down");
-		uuid_unparse(this->m_client_id, s_client_id);
-		query << "DELETE FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-		this->db->exec(query.str());
-		this->db->close();
+		{
+			stringstream query;
+			query << "DELETE FROM sessions WHERE client_id = '" << this->m_str_client_id << "';" << std::endl;
+			this->db->exec(query.str());
+			this->db->close();
+		}
 		delete this->db;
 	}
 	
