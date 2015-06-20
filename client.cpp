@@ -141,23 +141,17 @@ bool process_message(const int sockfd, bool wait) {
 void show_inventory() {
 	escrow::Inventory::iterator iter;
 	int i = 1;
-	char s_uuid_tmp[UUID_STR_SIZE];
-	uuid_t uuid_tmp, uuid_tmp2;
+	uuid_t owner_id;
 	
 	std::cout << "Current inventory:" << std::endl;
 	for (iter = g_inventory->begin(); iter < g_inventory->end(); ++iter, ++i) {
 		escrow::VirtualItem * item = *iter;
 		
-		bzero(s_uuid_tmp, UUID_STR_SIZE);
-		bzero(uuid_tmp, sizeof(uuid_t));
-		bzero(uuid_tmp2, sizeof(uuid_t));
+		bzero(owner_id, sizeof(uuid_t));
+		item->copy_original_owner_id(&owner_id);
 		
-		item->instance_id().copy((char *)uuid_tmp, sizeof(uuid_t));
-		item->original_owner_id().copy((char *)uuid_tmp2, sizeof(uuid_t));
-		uuid_unparse(uuid_tmp, s_uuid_tmp);
-		
-		std::cout << i << ") " << item->desc() << " [instance " << s_uuid_tmp << "] [local: " << (
-			uuid_compare(g_client_id, uuid_tmp2) == 0 ? "Y" : "N"
+		std::cout << i << ") " << item->desc() << " [instance " << item->instance_id_parsed() << "] [local: " << (
+			uuid_compare(g_client_id, owner_id) == 0 ? "Y" : "N"
 		) << "]" << std::endl;
 	}
 	std::cout << std::endl;

@@ -2,13 +2,13 @@
 #include <random>
 #include <string>
 #include <uuid/uuid.h>
+#include "shared/shared.h"
 #include "shared/virtualitems.h"
 
 namespace escrow {
 	using namespace std;
 	
-	string VirtualItem::get_item_desc(const int item_id)
-	{
+	string VirtualItem::get_item_desc(const int item_id) {
 		switch (item_id) {
 			// courtesy of: http://www.seventhsanctum.com/generate.php?Genname=sftool
 			case 0: return "Antimatter Retrocrowbar";
@@ -25,32 +25,44 @@ namespace escrow {
 		}
 	}
 
-	VirtualItem::VirtualItem(const int item_id, const uuid_t owner_id)
-	{
+	VirtualItem::VirtualItem(const int item_id, const uuid_t owner_id) {
+		char s_tmp_uuid[UUID_STR_SIZE];
+		
 		this->m_item_id = item_id;
 		uuid_generate(this->m_instance_id);
+		uuid_unparse(this->m_instance_id, s_tmp_uuid);
+		this->m_str_instance_id = string(s_tmp_uuid, UUID_STR_SIZE);
+		
 		this->m_desc = VirtualItem::get_item_desc(item_id);
+		
 		uuid_copy(this->m_owner_id, owner_id);
+		bzero(s_tmp_uuid, sizeof(UUID_STR_SIZE));
+		uuid_unparse(this->m_owner_id, s_tmp_uuid);
+		this->m_str_owner_id = string(s_tmp_uuid, UUID_STR_SIZE);
 	}
 
-	string VirtualItem::desc()
-	{
-		return string(this->m_desc);
+	string VirtualItem::desc() {
+		return this->m_desc;
 	}
 
-	string VirtualItem::instance_id()
-	{
-		return string((char *)this->m_instance_id, sizeof(uuid_t));
+	void VirtualItem::copy_instance_id(uuid_t * dst) {
+		uuid_copy(*dst, this->m_instance_id);
+	}
+	
+	string VirtualItem::instance_id_parsed() {
+		return this->m_str_instance_id;
 	}
 
-	int VirtualItem::item_id()
-	{
+	int VirtualItem::item_id() {
 		return this->m_item_id;
 	}
 	
-	string VirtualItem::original_owner_id()
-	{
-		return string((char *)this->m_owner_id, sizeof(uuid_t));
+	void VirtualItem::copy_original_owner_id(uuid_t * dst) {
+		uuid_copy(*dst, this->m_owner_id);
+	}
+	
+	string VirtualItem::original_owner_id_parsed() {
+		return this->m_str_owner_id;
 	}
 
 	void generate_random_inventory(Inventory * inventory, const int size, const uuid_t owner) {

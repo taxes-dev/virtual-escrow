@@ -12,13 +12,17 @@ namespace escrow {
 		VirtualItem(const int item_id, const uuid_t owner_id);
 		string desc();
 		int item_id();
-		string instance_id();
-		string original_owner_id();
+		void copy_instance_id(uuid_t * dst);
+		string instance_id_parsed();
+		void copy_original_owner_id(uuid_t * dst);
+		string original_owner_id_parsed();
 		static string get_item_desc(const int item_id);
 	private:
 		int m_item_id;
 		uuid_t m_instance_id;
+		string m_str_instance_id;
 		uuid_t m_owner_id;
+		string m_str_owner_id;
 		string m_desc;
 	};
 
