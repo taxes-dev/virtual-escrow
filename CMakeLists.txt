@@ -8,7 +8,6 @@ file(GLOB PROTO_FILES "${CMAKE_CURRENT_SOURCE_DIR}/protos/*.proto")
 PROTOBUF_GENERATE_CPP(PROTO_SRCS PROTO_HDRS ${PROTO_FILES})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${PROTOBUF_INCLUDE_DIRS})
-add_definitions("-std=c++11")
 
 # Dependencies
 add_subdirectory(sqlite-amalgamation-3081002)
@@ -21,7 +20,7 @@ target_compile_options(GENPROTOLIB PUBLIC "-std=c++11")
 # Server executable
 add_executable(ve-server server.cpp)
 target_compile_options(ve-server PUBLIC "-std=c++11")
-target_link_libraries(ve-server GENPROTOLIB SERVERLIB SHAREDLIB SQLITE pthread dl uuid ${PROTOBUF_LIBRARIES})
+target_link_libraries(ve-server SERVERLIB GENPROTOLIB SHAREDLIB SQLITE pthread dl uuid ${PROTOBUF_LIBRARIES})
 
 # Client executable
 add_executable(ve-client client.cpp)

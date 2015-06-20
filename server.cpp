@@ -10,162 +10,9 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <uuid/uuid.h>
-#include "sqlite-amalgamation-3081002/sqlite3.h"
-#include "echo.pb.h"
-#include "session.pb.h"
-#include "trade.pb.h"
 #include "shared/shared.h"
 #include "server/server-db.h"
-
-bool g_connected = false;
-uuid_t g_connected_client_id;
-uuid_t g_connected_session_id;
-
-void handle_AvailableTradePartnersRequest(const int newsockfd, const escrow::ServerDatabase * db, const escrow::AvailableTradePartnersRequest * partnersRequest) {
-	std::stringstream query;
-	escrow::DatabaseResults results;
-	escrow::DatabaseResults::iterator iter;
-	uuid_t u_client_id;
-	char s_client_id[UUID_STR_SIZE];
-	escrow::AvailableTradePartnersResponse * partnersResponse = new escrow::AvailableTradePartnersResponse();
-	
-	uuid_unparse(g_connected_client_id, s_client_id);
-	query << "SELECT client_id FROM sessions WHERE client_id != '" << s_client_id << "';" << std::endl;
-	db->exec_with_results(query.str(), &results);
-	
-	for (iter = results.begin(); iter < results.end(); ++iter) {
-		escrow::DatabaseRow row = *iter;
-		bzero((char *)u_client_id, sizeof(uuid_t));
-		uuid_parse(row["client_id"].c_str(), u_client_id);
-		partnersResponse->add_client_id((char *)u_client_id, sizeof(uuid_t));
-	}
-	
-	socket_write_message(newsockfd, MSG_ID_AVAILABLETRADEPARTNERSRESPONSE, partnersResponse);
-	
-	delete partnersResponse;
-}
-
-void handle_EchoRequest(const int newsockfd, const escrow::EchoRequest * echoRequest) {
-	std::stringstream logmsg;
-	
-	logmsg << "Here is the message: " << echoRequest->message() << std::endl; 
-	info(logmsg.str().c_str());
-	
-	escrow::EchoResponse * echoResponse = new escrow::EchoResponse();
-	echoResponse->set_message(echoRequest->message());
-
-	socket_write_message(newsockfd, MSG_ID_ECHORESPONSE, echoResponse);
-	
-	delete echoResponse;
-}
-
-void handle_SessionStartRequest(const int newsockfd, const escrow::ServerDatabase * db, const escrow::SessionStartRequest * sessionStartRequest) {
-	std::stringstream logmsg, query;
-	char s_client_id[UUID_STR_SIZE], s_session_id[UUID_STR_SIZE];
-	escrow::SessionStartResponse * sessionStartResponse = new escrow::SessionStartResponse();
-	
-	// message out of order?
-	if (g_connected) {
-		sessionStartResponse->set_client_id(g_connected_client_id, sizeof(uuid_t));
-		sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
-		sessionStartResponse->set_error(escrow::SessionStartError::SESSION_STARTED);
-	} else {
-		// get client ID from message
-		sessionStartRequest->client_id().copy((char *)g_connected_client_id, sizeof(uuid_t));
-		uuid_unparse(g_connected_client_id, s_client_id);
-		logmsg << "Got connection from: " << s_client_id << std::endl;
-		info(logmsg.str().c_str());
-		
-		// create response
-		sessionStartResponse->set_client_id(g_connected_client_id, sizeof(uuid_t));
-		
-		// check for duplicate session
-		query << "SELECT session_id FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-		escrow::DatabaseResults results;
-		db->exec_with_results(query.str(), &results);
-		if (results.size() > 0) {
-			// duplicate client
-			uuid_parse(results.back()["session_id"].c_str(), g_connected_session_id); 
-			sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
-			sessionStartResponse->set_error(escrow::SessionStartError::CLIENT_ALREADY_CONNECTED);
-		} else {
-			// generate new session id and record
-			uuid_generate(g_connected_session_id);
-			g_connected = true;
-			uuid_unparse(g_connected_session_id, s_session_id);
-			sessionStartResponse->set_session_id(g_connected_session_id, sizeof(uuid_t));
-			sessionStartResponse->set_error(escrow::SessionStartError::OK);
-		
-			query.str("");
-			query << "INSERT INTO sessions VALUES ('" << s_client_id << "', '" << s_session_id << "');" << std::endl;
-			db->exec(query.str());
-		}
-	}
-	
-	socket_write_message(newsockfd, MSG_ID_SESSIONSTARTRESPONSE, sessionStartResponse);
-	
-	delete sessionStartResponse;
-}
-
-void process(int newsockfd) {
-	char buffer[MESSAGE_BUFFER_SIZE];
-	int n;
-	escrow::ServerDatabase db;
-	struct pollfd sds;
-	std::stringstream query;
-	char s_client_id[UUID_STR_SIZE];
-	
-	db.open();
-	
-	while (1) {
-		sds.fd = newsockfd;
-		sds.events = POLLIN | POLLPRI | POLLHUP;
-		sds.revents = 0;
-		
-		if (poll(&sds, 1, 100) == 1) {
-			if (sds.revents & POLLHUP) {
-				break;
-			} else if (sds.revents & POLLPRI) {
-				n = recv(newsockfd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
-			} else {
-				n = recv(newsockfd, buffer, MESSAGE_BUFFER_SIZE, 0);
-			}
-
-			if (n == 0) {
-				break;
-			}
-			
-			if (n < 0) {
-				error("ERROR reading from socket");
-			}
-		
-			message_dispatch(buffer, n, [newsockfd, db](int message_id, google::protobuf::MessageLite * message) {
-				switch (message_id) {
-					case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-						handle_AvailableTradePartnersRequest(newsockfd, &db, (escrow::AvailableTradePartnersRequest *)message);
-						break;
-					case MSG_ID_ECHOREQUEST:
-						handle_EchoRequest(newsockfd, (escrow::EchoRequest *)message);
-						break;
-					case MSG_ID_SESSIONSTARTREQUEST:
-						handle_SessionStartRequest(newsockfd, &db, (escrow::SessionStartRequest *)message);
-						break;
-					default:
-						error("ERROR unhandled message");
-						break;
-				}
-			});
-		}
-	}
-	
-	info("Client disconnected, shutting down");
-	uuid_unparse(g_connected_client_id, s_client_id);
-	query << "DELETE FROM sessions WHERE client_id = '" << s_client_id << "';" << std::endl;
-	db.exec(query.str());
-	db.close();
-	
-	close(newsockfd);
-}
+#include "server/server-process.h"
 
 int main(int argc, char **argv) {
 	int sockfd, newsockfd, portno;
@@ -221,7 +68,9 @@ int main(int argc, char **argv) {
 		if (pid == 0) {
 			/* This is the client process */
 			close(sockfd);
-			process(newsockfd);
+			escrow::ServerProcess * serverProcess = new escrow::ServerProcess(newsockfd);
+			serverProcess->process(); // blocks until done
+			delete serverProcess;
 			break;
 		} else {
 			close(newsockfd);
@@ -230,8 +79,10 @@ int main(int argc, char **argv) {
 
 	if (pid == 0) {
 		shutdown(sockfd, SHUT_RDWR);
+		close(sockfd);
 	} else {
 		shutdown(newsockfd, SHUT_RDWR);
+		close(newsockfd);
 	}
 	google::protobuf::ShutdownProtobufLibrary();
 	return 0; 
