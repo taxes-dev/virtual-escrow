@@ -17,145 +17,7 @@
 #include "shared/messageformat.h"
 #include "shared/shared.h"
 #include "shared/virtualitems.h"
-
-uuid_t g_client_id;
-bool g_session_set = false;
-uuid_t g_session_id;
-escrow::Inventory * g_inventory;
-
-void cmd_AvailableTradePartnersRequest(const int sockfd) {
-	escrow::AvailableTradePartnersRequest * partnersRequest = new escrow::AvailableTradePartnersRequest();
-	socket_write_message(sockfd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, partnersRequest);
-	delete partnersRequest;
-}
-
-void cmd_EchoRequest(const int sockfd) {
-	std::cout << "Please enter the message: " << std::endl;
-	std::string input;
-	std::getline(std::cin, input);
-	
-	escrow::EchoRequest * echoRequest = new escrow::EchoRequest();
-	echoRequest->set_message(input);
-	socket_write_message(sockfd, MSG_ID_ECHOREQUEST, echoRequest);
-	delete echoRequest;
-}
-
-void cmd_SessionStartRequest(const int sockfd, const uuid_t client_id) {
-	escrow::SessionStartRequest * sessionStartRequest = new escrow::SessionStartRequest();
-	sessionStartRequest->set_client_id(client_id, sizeof(uuid_t));
-	socket_write_message(sockfd, MSG_ID_SESSIONSTARTREQUEST, sessionStartRequest);
-	delete sessionStartRequest;
-}
-
-void handle_AvailableTradePartnersResponse(const escrow::AvailableTradePartnersResponse * partnersResponse) {
-	uuid_t u_client_id;
-	char s_client_id[UUID_STR_SIZE];
-	google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
-	
-	if (partnersResponse->client_id_size() > 0) {
-		for (iter = partnersResponse->client_id().begin(); iter < partnersResponse->client_id().end(); ++iter) {
-			std::string client_id = *iter;
-			std::stringstream clientmsg;
-			
-			bzero((char *)u_client_id, sizeof(uuid_t));
-			bzero((char *)s_client_id, UUID_STR_SIZE);
-			client_id.copy((char *)u_client_id, sizeof(uuid_t));
-			uuid_unparse(u_client_id, s_client_id);
-			
-			clientmsg << "Available trade partner: " << s_client_id << std::endl;
-			info(clientmsg.str().c_str());
-		}
-	} else {
-		info("No available trade partners");
-	}
-}
-
-void handle_EchoResponse(const escrow::EchoResponse * echoResponse) {
-	std::stringstream logmsg;
-	logmsg << "Got response: " << echoResponse->message() << std::endl;
-	info(logmsg.str().c_str());
-}
-
-void handle_SessionStartResponse(const escrow::SessionStartResponse * sessionStartResponse) {
-	switch (sessionStartResponse->error()) {
-		case escrow::SessionStartError::OK:
-			sessionStartResponse->session_id().copy((char *)g_session_id, sizeof(uuid_t));
-			g_session_set = true;
-			break;
-		case escrow::SessionStartError::CLIENT_ALREADY_CONNECTED:
-			break;
-		default:
-			error("ERROR unknown session start error code");
-			break;
-	}
-}
-
-bool process_message(const int sockfd, bool wait) {
-	struct pollfd sds;
-	char buffer[MESSAGE_BUFFER_SIZE];
-	int n = 0;
-	
-	sds.fd = sockfd;
-	sds.events = POLLIN | POLLPRI | POLLHUP;
-	
-	if (poll(&sds, 1, wait ? -1 : 0) == 1) {
-		if (sds.revents & POLLHUP) {
-			return false;
-		} else if (sds.revents & POLLPRI) {
-			n = recv(sockfd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
-		} else {
-			n = recv(sockfd, buffer, MESSAGE_BUFFER_SIZE, 0);
-		}
-		
-		if (n == 0) {
-			return false;
-		}
-		
-		if (n < 0) {
-			error("ERROR reading from socket");
-		}
-		
-		if (n > 0) {
-			message_dispatch(buffer, n, [](int message_id, google::protobuf::MessageLite * message) {
-				switch (message_id) {
-					case MSG_ID_ECHORESPONSE:
-						handle_EchoResponse((escrow::EchoResponse *)message);
-						break;
-					case MSG_ID_SESSIONSTARTRESPONSE:
-						handle_SessionStartResponse((escrow::SessionStartResponse *)message);
-						break;
-					case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
-						handle_AvailableTradePartnersResponse((escrow::AvailableTradePartnersResponse *)message);
-						break;
-					default:
-						error("ERROR unhandled message");
-						break;
-				}
-			});
-		}
-	}
-	
-	return true;
-}
-
-void show_inventory() {
-	escrow::Inventory::iterator iter;
-	int i = 1;
-	uuid_t owner_id;
-	
-	std::cout << "Current inventory:" << std::endl;
-	for (iter = g_inventory->begin(); iter < g_inventory->end(); ++iter, ++i) {
-		escrow::VirtualItem * item = *iter;
-		
-		bzero(owner_id, sizeof(uuid_t));
-		item->copy_original_owner_id(&owner_id);
-		
-		std::cout << i << ") " << item->desc() << " [instance " << item->instance_id_parsed() << "] [local: " << (
-			uuid_compare(g_client_id, owner_id) == 0 ? "Y" : "N"
-		) << "]" << std::endl;
-	}
-	std::cout << std::endl;
-}
+#include "client/client-process.h"
 
 int char_if_ready() {
 	struct pollfd fds;
@@ -169,7 +31,7 @@ int char_if_ready() {
 	return 0;
 }
 
-void client_menu(const int sockfd) {
+void client_menu(escrow::ClientProcess & process) {
 	int c = 0;
 	while (c != 'q') {
 		c = 0;
@@ -177,11 +39,11 @@ void client_menu(const int sockfd) {
 		while (c == 0) {
 			c = char_if_ready(); // times out after 100ms
 			switch (c) {
-				case '1': cmd_EchoRequest(sockfd); break;
-				case '2': cmd_AvailableTradePartnersRequest(sockfd); break;
-				case 'i': show_inventory(); break;
+				case '1': process.cmd_EchoRequest(); break;
+				case '2': process.cmd_AvailableTradePartnersRequest(); break;
+				case 'i': process.show_inventory(); break;
 			}
-			if (process_message(sockfd, false) == false) {
+			if (process.process_message(false) == false) {
 				info("Lost connection, shutting down");
 				return;
 			}
@@ -193,8 +55,6 @@ int main(int argc, char *argv[]) {
 	int sockfd, portno;
 	struct sockaddr_in serv_addr;
 	struct hostent *server;
-	std::stringstream logmsg;
-	char uuid_buffer[UUID_STR_SIZE];
 	
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
@@ -221,23 +81,22 @@ int main(int argc, char *argv[]) {
 		error("ERROR connecting");
 	}
 	
-	uuid_generate(g_client_id);
-	uuid_unparse(g_client_id, uuid_buffer);
-	logmsg << "I am client " << uuid_buffer << std::endl;
-	info(logmsg.str().c_str());
+	escrow::ClientProcess process = escrow::ClientProcess(sockfd);
 	
-	cmd_SessionStartRequest(sockfd, g_client_id);
-	process_message(sockfd, true); // block until we get a SessionStartResponse
-	if (g_session_set) {
-		g_inventory = new escrow::Inventory();
-		escrow::generate_random_inventory(g_inventory, 5, g_client_id);
-		client_menu(sockfd);
-		escrow::free_inventory_items(g_inventory);
-		delete g_inventory;
+	{
+		std::stringstream logmsg;
+		logmsg << "I am client " << process.client_id_parsed() << std::endl;
+		info(logmsg.str().c_str());
+	}
+	
+	if (process.start_session()) {
+		client_menu(process);
 	} else {
 		info("Client with this ID is already connected, disconnecting");
 	}
+
 	shutdown(sockfd, SHUT_RDWR);
+	close(sockfd);
 	google::protobuf::ShutdownProtobufLibrary();
 	info("done");
 	return 0;

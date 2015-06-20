@@ -12,6 +12,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_BINARY_DIR} ${PROTOBUF_I
 # Dependencies
 add_subdirectory(sqlite-amalgamation-3081002)
 add_subdirectory(server)
+add_subdirectory(client)
 add_subdirectory(shared)
 
 add_library(GENPROTOLIB ${PROTO_SRCS})
@@ -25,7 +26,8 @@ target_link_libraries(ve-server SERVERLIB GENPROTOLIB SHAREDLIB SQLITE pthread d
 # Client executable
 add_executable(ve-client client.cpp)
 target_compile_options(ve-client PUBLIC "-std=c++11")
-target_link_libraries(ve-client GENPROTOLIB SHAREDLIB uuid ${PROTOBUF_LIBRARIES})
+target_link_libraries(ve-client CLIENTLIB GENPROTOLIB SHAREDLIB uuid ${PROTOBUF_LIBRARIES})
 
 # Install binaries
 install(TARGETS ve-server ve-client RUNTIME DESTINATION bin)
+

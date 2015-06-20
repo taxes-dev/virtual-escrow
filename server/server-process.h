@@ -11,7 +11,7 @@ namespace escrow {
 
 	class ServerProcess {
 	public:
-		ServerProcess(int sock_fd) { this->m_sock_fd = sock_fd; };
+		ServerProcess(const int sock_fd) { this->m_sock_fd = sock_fd; };
 		void process();
 	private:
 		bool m_connected = false;
