@@ -48,7 +48,28 @@ void client_menu(escrow::ClientProcess & process) {
 					process.cmd_EchoRequest(input);
 					break;
 				}
-				case '2': process.cmd_AvailableTradePartnersRequest(); break;
+				case '2': process.cmd_AvailableTradePartnersRequest([](const escrow::AvailableTradePartnersResponse * response) {
+					uuid_t u_client_id;
+					char s_client_id[UUID_STR_SIZE];
+					google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
+					
+					if (response->client_id_size() > 0) {
+						for (iter = response->client_id().begin(); iter < response->client_id().end(); ++iter) {
+							std::string client_id = *iter;
+							std::stringstream clientmsg;
+							
+							bzero((char *)u_client_id, sizeof(uuid_t));
+							bzero((char *)s_client_id, UUID_STR_SIZE);
+							client_id.copy((char *)u_client_id, sizeof(uuid_t));
+							uuid_unparse(u_client_id, s_client_id);
+							
+							clientmsg << "Available trade partner: " << s_client_id << std::endl;
+							info(clientmsg.str().c_str());
+						}
+					} else {
+						info("No available trade partners");
+					}
+				}); break;
 				case 'i': process.show_inventory(); break;
 			}
 			if (process.process_message(false) == false) {

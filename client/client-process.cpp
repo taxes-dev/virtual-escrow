@@ -31,27 +31,52 @@ namespace escrow {
 	{
 		free_inventory_items(this->m_inventory);
 		delete this->m_inventory;
+		if (m_callbacks.size() > 0) {
+			m_callbacks.clear();
+		}
 	}
 	
-	void ClientProcess::cmd_AvailableTradePartnersRequest() {
+	void ClientProcess::add_callback(const uuid_t & request_id, const MessageCallback<google::protobuf::MessageLite> & callback) {
+		string s_request_id = string((char *)request_id, sizeof(uuid_t));
+		this->m_callbacks[s_request_id] = callback;
+	}
+	
+	void ClientProcess::invoke_callback(const uuid_t & request_id, const google::protobuf::MessageLite * message) {
+		string s_request_id = string((char *)request_id, sizeof(uuid_t));
+		map<string, MessageCallback<google::protobuf::MessageLite>>::iterator iter = this->m_callbacks.find(s_request_id);
+		
+		if (iter != this->m_callbacks.end()) {
+			this->m_callbacks[s_request_id](message);
+			this->m_callbacks.erase(iter);
+		}
+	}
+	
+	void ClientProcess::cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback) {
+		uuid_t request_id;
 		AvailableTradePartnersRequest partnersRequest;
-		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, &partnersRequest);
+		
+		uuid_generate(request_id);
+		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, request_id, &partnersRequest);
+		
+		this->add_callback(request_id, [callback](const google::protobuf::MessageLite * message){
+			callback(static_cast<const AvailableTradePartnersResponse *>(message));
+		});
 	}
 
 	void ClientProcess::cmd_EchoRequest(string & message) {
 		escrow::EchoRequest echoRequest;
 		echoRequest.set_message(message);
-		socket_write_message(this->m_sock_fd, MSG_ID_ECHOREQUEST, &echoRequest);
+		socket_write_message(this->m_sock_fd, MSG_ID_ECHOREQUEST, nullptr, &echoRequest);
 	}
 
 	void ClientProcess::cmd_SessionStartRequest() {
 		escrow::SessionStartRequest sessionStartRequest;
 		sessionStartRequest.set_client_id(this->m_client_id, sizeof(uuid_t));
-		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTREQUEST, &sessionStartRequest);
+		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTREQUEST, nullptr, &sessionStartRequest);
 	}
 
 	template<> void ClientProcess::handle(const escrow::AvailableTradePartnersResponse * partnersResponse) {
-		uuid_t u_client_id;
+		/*uuid_t u_client_id;
 		char s_client_id[UUID_STR_SIZE];
 		google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
 		
@@ -70,7 +95,7 @@ namespace escrow {
 			}
 		} else {
 			info("No available trade partners");
-		}
+		}*/
 	}
 
 	template<> void ClientProcess::handle(const escrow::EchoResponse * echoResponse) {
@@ -120,21 +145,23 @@ namespace escrow {
 			}
 			
 			if (n > 0) {
-				message_dispatch(buffer, n, [this](int message_id, google::protobuf::MessageLite * message) {
-					switch (message_id) {
+				message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
+					switch (wrapper->message_id) {
 						case MSG_ID_ECHORESPONSE:
-							this->handle((escrow::EchoResponse *)message);
+							this->handle(static_cast<escrow::EchoResponse *>(message));
 							break;
 						case MSG_ID_SESSIONSTARTRESPONSE:
-							this->handle((escrow::SessionStartResponse *)message);
+							this->handle(static_cast<escrow::SessionStartResponse *>(message));
 							break;
 						case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
-							this->handle((escrow::AvailableTradePartnersResponse *)message);
+							this->handle(static_cast<escrow::AvailableTradePartnersResponse *>(message));
 							break;
 						default:
 							error("ERROR unhandled message");
 							break;
 					}
+					
+					this->invoke_callback(wrapper->request_id, message);
 				});
 			}
 		}

@@ -1,20 +1,22 @@
-#ifndef _MESSAGEFORMAT_H
-#define _MESSAGEFORMAT_H
+#ifndef H_MESSAGEFORMAT
+#define H_MESSAGEFORMAT
 
 #include <functional>
+#include <uuid/uuid.h>
 
 #define MESSAGE_BUFFER_SIZE 1024
-#define MESSAGE_MAX_BODY_SIZE (MESSAGE_BUFFER_SIZE - sizeof(int) - sizeof(int))
+#define MESSAGE_MAX_BODY_SIZE (MESSAGE_BUFFER_SIZE - sizeof(int) - sizeof(int) - sizeof(uuid_t))
 
 namespace escrow {
 	typedef struct s_MessageWrapper {
 		int message_id;
 		int body_size;
+		uuid_t request_id;
 		char body[MESSAGE_MAX_BODY_SIZE];
 	} MessageWrapper;
 }
 
-#define MESSAGEWRAPPER_SIZE(p) (sizeof(int) + sizeof(int) + p.body_size)
+#define MESSAGEWRAPPER_SIZE(p) (sizeof(int) + sizeof(int) + sizeof(uuid_t) + p.body_size)
 
 // protobuf mappings
 #define MSG_ID_ECHOREQUEST 1

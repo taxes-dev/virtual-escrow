@@ -23,7 +23,7 @@ namespace escrow {
 		int m_sock_fd;
 		
 		template <typename T>
-		void handle(const T * message) { };
+		void handle(const T * message, const uuid_t & request_id) { };
 		void set_client_id(const std::string & client_id);
 		void start_session();
 	};

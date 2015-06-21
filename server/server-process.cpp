@@ -14,7 +14,7 @@
 namespace escrow {
 	using namespace std;
 	
-	template<> void ServerProcess::handle(const AvailableTradePartnersRequest * partnersRequest) {
+	template<> void ServerProcess::handle(const AvailableTradePartnersRequest * partnersRequest, const uuid_t & request_id) {
 		stringstream query;
 		DatabaseResults results;
 		DatabaseResults::iterator iter;
@@ -35,12 +35,12 @@ namespace escrow {
 			partnersResponse->add_client_id((char *)u_client_id, sizeof(uuid_t));
 		}
 		
-		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSRESPONSE, partnersResponse);
+		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSRESPONSE, request_id, partnersResponse);
 		
 		delete partnersResponse;
 	}
 	
-	template<> void ServerProcess::handle(const EchoRequest * echoRequest) {
+	template<> void ServerProcess::handle(const EchoRequest * echoRequest, const uuid_t & request_id) {
 		stringstream logmsg;
 		
 		logmsg << "Here is the message: " << echoRequest->message() << std::endl; 
@@ -49,12 +49,12 @@ namespace escrow {
 		EchoResponse * echoResponse = new EchoResponse();
 		echoResponse->set_message(echoRequest->message());
 		
-		socket_write_message(this->m_sock_fd, MSG_ID_ECHORESPONSE, echoResponse);
+		socket_write_message(this->m_sock_fd, MSG_ID_ECHORESPONSE, request_id, echoResponse);
 		
 		delete echoResponse;
 	}
 	
-	template<> void ServerProcess::handle(const SessionStartRequest * sessionStartRequest) {
+	template<> void ServerProcess::handle(const SessionStartRequest * sessionStartRequest, const uuid_t & request_id) {
 		SessionStartResponse * sessionStartResponse = new SessionStartResponse();
 		
 		// message out of order?
@@ -97,7 +97,7 @@ namespace escrow {
 			}
 		}
 		
-		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTRESPONSE, sessionStartResponse);
+		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTRESPONSE, request_id, sessionStartResponse);
 		
 		delete sessionStartResponse;
 	}
@@ -151,16 +151,16 @@ namespace escrow {
 					error("ERROR reading from socket");
 				}
 				
-				message_dispatch(buffer, n, [this](int message_id, google::protobuf::MessageLite * message) {
-					switch (message_id) {
+				message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
+					switch (wrapper->message_id) {
 						case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-							this->handle(static_cast<AvailableTradePartnersRequest *>(message));
+							this->handle(static_cast<AvailableTradePartnersRequest *>(message), wrapper->request_id);
 							break;
 						case MSG_ID_ECHOREQUEST:
-							this->handle(static_cast<EchoRequest *>(message));
+							this->handle(static_cast<EchoRequest *>(message), wrapper->request_id);
 							break;
 						case MSG_ID_SESSIONSTARTREQUEST:
-							this->handle(static_cast<SessionStartRequest *>(message));
+							this->handle(static_cast<SessionStartRequest *>(message), wrapper->request_id);
 							break;
 						default:
 							error("ERROR unhandled message");

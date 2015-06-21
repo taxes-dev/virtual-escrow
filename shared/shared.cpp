@@ -2,6 +2,7 @@
 #include <sstream>
 #include <sys/types.h>
 #include <unistd.h>
+#include <uuid/uuid.h>
 #include "shared.h"
 #include "echo.pb.h"
 #include "session.pb.h"
@@ -18,7 +19,7 @@ bool create_wrapper_from_buffer(const char * buffer, const size_t buffer_size, e
 	return true;
 }
 
-bool create_wrapper_from_protobuf(const google::protobuf::MessageLite * protobuf, const int message_id, escrow::MessageWrapper * wrapper) {
+bool create_wrapper_from_protobuf(const google::protobuf::MessageLite * protobuf, const int message_id, const uuid_t request_id, escrow::MessageWrapper * wrapper) {
 	char buffer[MESSAGE_BUFFER_SIZE];
 	
 	if (protobuf->SerializeToArray(buffer, MESSAGE_BUFFER_SIZE) == false) {
@@ -26,6 +27,7 @@ bool create_wrapper_from_protobuf(const google::protobuf::MessageLite * protobuf
 	}
 
 	wrapper->message_id = message_id;
+	uuid_copy(wrapper->request_id, request_id);
 	wrapper->body_size = protobuf->ByteSize();
 	memcpy(wrapper->body, buffer, wrapper->body_size);
 	
@@ -43,7 +45,7 @@ void info(const char *msg) {
 	std::cout << "[" << pid << " INFO] " << msg << std::endl;
 }
 
-void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(int, google::protobuf::MessageLite *)> & handler) {
+void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(const escrow::MessageWrapper *, google::protobuf::MessageLite *)> & handler) {
 	escrow::MessageWrapper requestFrame;
 	if (create_wrapper_from_buffer(buffer, buffer_size, &requestFrame) == false) {
 		error("ERROR copying buffer to request frame");
@@ -77,19 +79,25 @@ void message_dispatch(const char * buffer, const size_t buffer_size, const std::
 	if (create_protobuf_from_wrapper(&requestFrame, message) == false) {
 		error("ERROR parsing protobuf from array");
 	}
-	handler(requestFrame.message_id, message);
+	handler(&requestFrame, message);
 	delete message;
 }
 
-void socket_write_message(const int sockfd, const int message_id, const google::protobuf::MessageLite * message) {
+void socket_write_message(const int sockfd, const int message_id, const uuid_t request_id, const google::protobuf::MessageLite * message) {
 	std::stringstream logmsg;
+	uuid_t actual_request_id;
 	if (message->IsInitialized() == false) {
 		logmsg << "ERROR message not prepared: " << message->InitializationErrorString() << std::endl;
 		error(logmsg.str().c_str());
 	}
 	
 	escrow::MessageWrapper responseFrame;
-	if (create_wrapper_from_protobuf(message, message_id, &responseFrame) == false) {
+	if (request_id == nullptr) {
+		uuid_generate(actual_request_id);
+	} else {
+		uuid_copy(actual_request_id, request_id);
+	}
+	if (create_wrapper_from_protobuf(message, message_id, actual_request_id, &responseFrame) == false) {
 		error("ERROR framing response");
 	}
 	
