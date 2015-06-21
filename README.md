@@ -10,6 +10,7 @@ Currently it's only designed to build on Linux.
  * [CMake 3.0](http://www.cmake.org/) (build separately)
  * [SQLite 3.8.10.2](https://www.sqlite.org/) (included in repository)
  * [Google Protobuf 2.6.1](https://github.com/google/protobuf) (build separately)
+ * [FLTK 1.3.3](http://www.fltk.org/index.php) (build separately)
 
 ## License
 

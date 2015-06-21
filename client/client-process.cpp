@@ -36,14 +36,14 @@ namespace escrow {
 		}
 	}
 	
-	void ClientProcess::add_callback(const uuid_t & request_id, const MessageCallback<google::protobuf::MessageLite> & callback) {
+	void ClientProcess::add_callback(const uuid_t & request_id, const MessageCallbackInt & callback) {
 		string s_request_id = string((char *)request_id, sizeof(uuid_t));
 		this->m_callbacks[s_request_id] = callback;
 	}
 	
 	void ClientProcess::invoke_callback(const uuid_t & request_id, const google::protobuf::MessageLite * message) {
 		string s_request_id = string((char *)request_id, sizeof(uuid_t));
-		map<string, MessageCallback<google::protobuf::MessageLite>>::iterator iter = this->m_callbacks.find(s_request_id);
+		map<string, MessageCallbackInt>::iterator iter = this->m_callbacks.find(s_request_id);
 		
 		if (iter != this->m_callbacks.end()) {
 			this->m_callbacks[s_request_id](message);
@@ -51,22 +51,29 @@ namespace escrow {
 		}
 	}
 	
-	void ClientProcess::cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback) {
+	void ClientProcess::cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback, void * data) {
 		uuid_t request_id;
 		AvailableTradePartnersRequest partnersRequest;
 		
 		uuid_generate(request_id);
 		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, request_id, &partnersRequest);
 		
-		this->add_callback(request_id, [callback](const google::protobuf::MessageLite * message){
-			callback(static_cast<const AvailableTradePartnersResponse *>(message));
+		this->add_callback(request_id, [callback, data](const google::protobuf::MessageLite * message){
+			callback(static_cast<const AvailableTradePartnersResponse *>(message), data);
 		});
 	}
 
-	void ClientProcess::cmd_EchoRequest(string & message) {
-		escrow::EchoRequest echoRequest;
+	void ClientProcess::cmd_EchoRequest(const string & message, const MessageCallback<EchoResponse> & callback, void * data) {
+		uuid_t request_id;
+		EchoRequest echoRequest;
+		
+		uuid_generate(request_id);
 		echoRequest.set_message(message);
-		socket_write_message(this->m_sock_fd, MSG_ID_ECHOREQUEST, nullptr, &echoRequest);
+		socket_write_message(this->m_sock_fd, MSG_ID_ECHOREQUEST, request_id, &echoRequest);
+
+		this->add_callback(request_id, [callback, data](const google::protobuf::MessageLite * message){
+			callback(static_cast<const EchoResponse *>(message), data);
+		});
 	}
 
 	void ClientProcess::cmd_SessionStartRequest() {
@@ -127,7 +134,7 @@ namespace escrow {
 		sds.fd = this->m_sock_fd;
 		sds.events = POLLIN | POLLPRI | POLLHUP;
 		
-		if (poll(&sds, 1, wait ? -1 : 0) == 1) {
+		if (poll(&sds, 1, wait ? -1 : 100) == 1) {
 			if (sds.revents & POLLHUP) {
 				return false;
 			} else if (sds.revents & POLLPRI) {

@@ -14,7 +14,8 @@ namespace escrow {
 	using namespace std;
 	
 	template <typename T>
-	using MessageCallback = function<void(const T *)>;
+	using MessageCallback = function<void(const T *, void * data)>;
+	using MessageCallbackInt = function<void(const google::protobuf::MessageLite *)>;
 	
 	class ClientProcess {
 	public:
@@ -25,8 +26,8 @@ namespace escrow {
 		void show_inventory();
 		bool start_session();
 
-		void cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback);
-		void cmd_EchoRequest(string & message);
+		void cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback, void * data);
+		void cmd_EchoRequest(const string & message, const MessageCallback<EchoResponse> & callback, void * data);
 	private:
 		int m_sock_fd;
 		uuid_t m_client_id;
@@ -34,9 +35,9 @@ namespace escrow {
 		bool m_session_set = false;
 		uuid_t m_session_id;
 		Inventory * m_inventory;
-		map<string, MessageCallback<google::protobuf::MessageLite>> m_callbacks;
+		map<string, MessageCallbackInt> m_callbacks;
 
-		void add_callback(const uuid_t & request_id, const MessageCallback<google::protobuf::MessageLite> & callback);
+		void add_callback(const uuid_t & request_id, const MessageCallbackInt & callback);
 		void cmd_SessionStartRequest();
 		void invoke_callback(const uuid_t & request_id, const google::protobuf::MessageLite * message);
 		
