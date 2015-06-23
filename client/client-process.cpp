@@ -175,25 +175,6 @@ namespace escrow {
 		
 		return true;
 	}
-
-	void ClientProcess::show_inventory() {
-		escrow::Inventory::iterator iter;
-		int i = 1;
-		uuid_t owner_id;
-		
-		std::cout << "Current inventory:" << std::endl;
-		for (iter = this->m_inventory->begin(); iter < this->m_inventory->end(); ++iter, ++i) {
-			escrow::VirtualItem * item = *iter;
-			
-			bzero(owner_id, sizeof(uuid_t));
-			item->copy_original_owner_id(&owner_id);
-			
-			std::cout << i << ") " << item->desc() << " [instance " << item->instance_id_parsed() << "] [local: " << (
-				uuid_compare(this->m_client_id, owner_id) == 0 ? "Y" : "N"
-			) << "]" << std::endl;
-		}
-		std::cout << std::endl;
-	}
 	
 	bool ClientProcess::start_session()
 	{

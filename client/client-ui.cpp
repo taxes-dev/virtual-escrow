@@ -7,9 +7,14 @@
 #include <sys/socket.h>
 #include <FL/Fl.H>
 #include <FL/Fl_Window.H>
+#include <FL/Fl_Box.H>
 #include <FL/Fl_Button.H>
 #include <FL/Fl_Input.H>
+#include <FL/Fl_Output.H>
+#include <FL/Fl_Pack.H>
+#include <FL/Fl_Scroll.H>
 #include <FL/Fl_Text_Display.H>
+#include <FL/Enumerations.H>
 #include "client/client-ui.h"
 #include "shared/shared.h"
 #include "echo.pb.h"
@@ -24,6 +29,14 @@
 namespace escrow {
 	using namespace std;
 		
+	void ScrollResize::resize(int x, int y, int w, int h) {
+		Fl_Scroll::resize(x, y, w, h);
+		Fl_Pack * child = dynamic_cast<Fl_Pack *>(this->child(0));
+		if (child) {
+			child->resize(this->x(), this->y(), this->w(), child->h());
+		}
+	}
+	
 	void ClientUI::add_output(const string & text)
 	{
 		Fl::lock();
@@ -58,6 +71,33 @@ namespace escrow {
 		}, this);
 	}
 	
+	void ClientUI::refresh_inventory() {
+		escrow::Inventory::iterator iter;
+		int i = 1;
+		uuid_t owner_id;
+		Inventory * inventory = this->m_process->inventory();
+		
+		Fl::lock();
+		this->m_fl_inventory->clear();
+		for (iter = inventory->begin(); iter < inventory->end(); ++iter, ++i) {
+			escrow::VirtualItem * item = *iter;
+			
+			bzero(owner_id, sizeof(uuid_t));
+			item->copy_original_owner_id(&owner_id);
+			
+			Fl_Box * box = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, 0, 250, 25, item->desc().c_str());
+			box->color(fl_rgb_color(255, 255, 255));
+			this->m_fl_inventory->add(box);
+			
+			/*std::cout << i << ") " << item->desc() << " [instance " << item->instance_id_parsed() << "] [local: " << (
+				uuid_compare(this->m_client_id, owner_id) == 0 ? "Y" : "N"
+			) << "]" << std::endl;*/
+		}
+		this->m_fl_inventory->redraw();
+		Fl::awake();
+		Fl::unlock();
+	}
+	
 	void ClientUI::run()
 	{
 		pthread_t sockthread;
@@ -66,78 +106,53 @@ namespace escrow {
 		this->m_running = true;
 		
 		Fl::lock(); // init fltk threading
+		
+		// begin window
 		Fl_Window win(DEFAULT_WIN_W, DEFAULT_WIN_H);
 		win.size_range(MIN_WIN_W, MIN_WIN_H);
 		win.label("Virtual Escrow Client");
 		win.resizable(win);
+		
+		// echo message controls
 		Fl_Input echo_input(10, 10, 250, 25);
 		echo_input.value("This is an echo message.");
 		this->m_fl_echo_input = &echo_input;
 		Fl_Button echo_button(270, 10, 100, 25, "Echo");
 		echo_button.callback([](Fl_Widget * widget, void * data) { static_cast<ClientUI *>(data)->echo_button_callback(); }, this);
+				
+		// inventory display
+		Fl_Box inventory_label(10, 45, 250, 25, "Inventory:");
+		ScrollResize inventory_scroll(10, 70, 350, 250);
+		inventory_scroll.type(Fl_Scroll::VERTICAL);
+			Fl_Pack inventory(inventory_scroll.x(), inventory_scroll.y(), inventory_scroll.w(), inventory_scroll.h());
+			inventory.resizable(inventory);
+			inventory.end();
+		inventory_scroll.end();
+		this->m_fl_inventory = &inventory;
+		
+		// output log
 		Fl_Text_Display output(10, 340, 730, 150);
 		output.buffer(textbuffer);
 		output.hide_cursor();
 		this->m_fl_output = &output;
+				
+		// end window
 		win.end();
 		win.show();
 		
+		// create processing thread
 		int retval = pthread_create(&sockthread, nullptr, [](void * context) -> void * { static_cast<ClientUI *>(context)->socket_thread(); }, this);
 		if (retval) {
 			error("ERROR creating background thread");
 		}
 		
+		this->refresh_inventory();
+		
+		// wait until window is closed or connection to server is closed
 		while (this->is_running() && Fl::wait() > 0) ;
 		
 		this->m_running = false;
 		
 		pthread_join(sockthread, nullptr);
-		
-		/*int c = 0;
-		while (c != 'q') {
-			c = 0;
-			std::cout << "Choose a message to send (select and press ENTER):\n1) echo\n2) available trade partners\ni) display inventory\nq) quit" << std::endl;
-			while (c == 0) {
-				c = char_if_ready(); // times out after 100ms
-				switch (c) {
-					case '1':
-					{
-						std::cout << "Please enter the message: " << std::endl;
-						std::string input;
-						std::getline(std::cin, input);
-						
-						this->m_process->cmd_EchoRequest(input);
-						break;
-					}
-					case '2': this->m_process->cmd_AvailableTradePartnersRequest([](const escrow::AvailableTradePartnersResponse * response) {
-						uuid_t u_client_id;
-						char s_client_id[UUID_STR_SIZE];
-						google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
-						
-						if (response->client_id_size() > 0) {
-							for (iter = response->client_id().begin(); iter < response->client_id().end(); ++iter) {
-								std::string client_id = *iter;
-								std::stringstream clientmsg;
-								
-								bzero((char *)u_client_id, sizeof(uuid_t));
-								bzero((char *)s_client_id, UUID_STR_SIZE);
-								client_id.copy((char *)u_client_id, sizeof(uuid_t));
-								uuid_unparse(u_client_id, s_client_id);
-								
-								clientmsg << "Available trade partner: " << s_client_id << std::endl;
-								info(clientmsg.str().c_str());
-							}
-						} else {
-							info("No available trade partners");
-						}
-					}); break;
-					case 'i': this->m_process->show_inventory(); break;
-				}
-				if (this->m_process->process_message(false) == false) {
-					info("Lost connection, shutting down");
-					return;
-				}
-			}
-		}*/
 	}
 }

@@ -22,8 +22,8 @@ namespace escrow {
 		ClientProcess(const int sock_fd);
 		~ClientProcess();
 		inline string client_id_parsed() { return this->m_str_client_id; };
+		inline Inventory * inventory() { return this->m_inventory; };
 		bool process_message(bool wait);
-		void show_inventory();
 		bool start_session();
 
 		void cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback, void * data);
