@@ -20,9 +20,8 @@ namespace escrow {
 	class ClientProcess {
 	public:
 		ClientProcess(const int sock_fd);
-		~ClientProcess();
 		inline string client_id_parsed() { return this->m_str_client_id; };
-		inline Inventory * inventory() { return this->m_inventory; };
+		inline Inventory * inventory() { return &this->m_inventory; };
 		bool process_message(bool wait);
 		bool start_session();
 
@@ -34,7 +33,7 @@ namespace escrow {
 		string m_str_client_id;
 		bool m_session_set = false;
 		uuid_t m_session_id;
-		Inventory * m_inventory;
+		Inventory m_inventory;
 		map<string, MessageCallbackInt> m_callbacks;
 
 		void add_callback(const uuid_t & request_id, const MessageCallbackInt & callback);

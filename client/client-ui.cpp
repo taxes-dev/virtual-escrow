@@ -72,15 +72,12 @@ namespace escrow {
 	}
 	
 	void ClientUI::refresh_inventory() {
-		escrow::Inventory::iterator iter;
-		int i = 1;
 		uuid_t owner_id;
 		Inventory * inventory = this->m_process->inventory();
 		
 		Fl::lock();
 		this->m_fl_inventory->clear();
-		for (iter = inventory->begin(); iter < inventory->end(); ++iter, ++i) {
-			escrow::VirtualItem * item = *iter;
+		for (auto & item : *inventory) {
 			
 			bzero(owner_id, sizeof(uuid_t));
 			item->copy_original_owner_id(&owner_id);

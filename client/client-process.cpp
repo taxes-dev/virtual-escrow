@@ -22,20 +22,10 @@ namespace escrow {
 		uuid_unparse(this->m_client_id, t_client_id);
 		this->m_str_client_id = string(t_client_id, UUID_STR_SIZE);
 		this->m_sock_fd = sock_fd;
-		this->m_inventory = new Inventory();
 		
 		generate_random_inventory(this->m_inventory, DEFAULT_INVENTORY_SIZE, this->m_client_id);
 	}
-	
-	ClientProcess::~ClientProcess()
-	{
-		free_inventory_items(this->m_inventory);
-		delete this->m_inventory;
-		if (m_callbacks.size() > 0) {
-			m_callbacks.clear();
-		}
-	}
-	
+		
 	void ClientProcess::add_callback(const uuid_t & request_id, const MessageCallbackInt & callback) {
 		string s_request_id = string((char *)request_id, sizeof(uuid_t));
 		this->m_callbacks[s_request_id] = callback;

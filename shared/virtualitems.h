@@ -1,5 +1,6 @@
-#ifndef _VIRTUALITEMS_H
-#define _VIRTUALITEMS_H
+#ifndef VIRTUALITEMS_H
+#define VIRTUALITEMS_H
+#include <memory>
 #include <string>
 #include <vector>
 #include <uuid/uuid.h>
@@ -26,9 +27,8 @@ namespace escrow {
 		string m_desc;
 	};
 
-	using Inventory = vector<VirtualItem *>;
-	void generate_random_inventory(Inventory * inventory, const int size, const uuid_t owner);
-	void free_inventory_items(Inventory * inventory);
+	using Inventory = vector<unique_ptr<VirtualItem>>;
+	void generate_random_inventory(Inventory & inventory, const int size, const uuid_t owner);
 	
 	inline void VirtualItem::copy_instance_id(uuid_t * dst) {
 		uuid_copy(*dst, this->m_instance_id);

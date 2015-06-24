@@ -1,4 +1,5 @@
 #include <functional>
+#include <memory>
 #include <random>
 #include <string>
 #include <uuid/uuid.h>
@@ -41,24 +42,16 @@ namespace escrow {
 		this->m_str_owner_id = string(s_tmp_uuid, UUID_STR_SIZE);
 	}
 	
-	void generate_random_inventory(Inventory * inventory, const int size, const uuid_t owner) {
+	void generate_random_inventory(Inventory & inventory, const int size, const uuid_t owner) {
 		if (size > 0) {
 			default_random_engine generator;
 			uniform_int_distribution<int> distribution(0, 9);
 			auto randitem = bind(distribution, generator);
 			
 			for (int i = 0; i < size; i++) {
-				VirtualItem * item = new VirtualItem(randitem(), owner);
-				inventory->push_back(item);
+				unique_ptr<VirtualItem>  item(new VirtualItem(randitem(), owner));
+				inventory.push_back(move(item));
 			}
-		}
-	}
-	
-	void free_inventory_items(Inventory * inventory) {
-		while (inventory->size() > 0) {
-			VirtualItem * item = inventory->back();
-			delete item;
-			inventory->pop_back();
 		}
 	}
 }
