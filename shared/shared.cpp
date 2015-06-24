@@ -1,7 +1,9 @@
 #include <iostream>
 #include <sstream>
-#include <sys/types.h>
 #include <unistd.h>
+#include <sys/poll.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <uuid/uuid.h>
 #include "shared.h"
 #include "echo.pb.h"
@@ -106,3 +108,4 @@ void socket_write_message(const int sockfd, const int message_id, const uuid_t r
 		error("ERROR writing to socket");
 	}
 }
+

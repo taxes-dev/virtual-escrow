@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <unistd.h>
@@ -51,16 +52,16 @@ int main(int argc, char *argv[]) {
 		error("ERROR connecting");
 	}
 	
-	escrow::ClientProcess process = escrow::ClientProcess(sockfd);
+	std::unique_ptr<escrow::ClientProcess> process(new escrow::ClientProcess(sockfd));
 	
 	{
 		std::stringstream logmsg;
-		logmsg << "I am client " << process.client_id_parsed() << std::endl;
+		logmsg << "I am client " << process->client_id_parsed() << std::endl;
 		info(logmsg.str().c_str());
 	}
 	
-	if (process.start_session()) {
-		escrow::ClientUI ui = escrow::ClientUI(&process);
+	if (process->start_session()) {
+		escrow::ClientUI ui = escrow::ClientUI(process);
 		ui.run();
 	} else {
 		info("Client with this ID is already connected, disconnecting");

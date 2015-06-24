@@ -14,41 +14,25 @@
 namespace escrow {
 	using namespace std;
 	
-	ClientProcess::ClientProcess(const int sock_fd)
+	ClientProcess::ClientProcess(const int sock_fd) : BaseProcess(sock_fd)
 	{
 		char t_client_id[UUID_STR_SIZE];
 		
 		uuid_generate(this->m_client_id);
 		uuid_unparse(this->m_client_id, t_client_id);
 		this->m_str_client_id = string(t_client_id, UUID_STR_SIZE);
-		this->m_sock_fd = sock_fd;
 		
 		generate_random_inventory(this->m_inventory, DEFAULT_INVENTORY_SIZE, this->m_client_id);
 	}
-		
-	void ClientProcess::add_callback(const uuid_t & request_id, const MessageCallbackInt & callback) {
-		string s_request_id = string((char *)request_id, sizeof(uuid_t));
-		this->m_callbacks[s_request_id] = callback;
-	}
-	
-	void ClientProcess::invoke_callback(const uuid_t & request_id, const google::protobuf::MessageLite * message) {
-		string s_request_id = string((char *)request_id, sizeof(uuid_t));
-		map<string, MessageCallbackInt>::iterator iter = this->m_callbacks.find(s_request_id);
-		
-		if (iter != this->m_callbacks.end()) {
-			this->m_callbacks[s_request_id](message);
-			this->m_callbacks.erase(iter);
-		}
-	}
-	
+			
 	void ClientProcess::cmd_AvailableTradePartnersRequest(const MessageCallback<AvailableTradePartnersResponse> & callback, void * data) {
 		uuid_t request_id;
 		AvailableTradePartnersRequest partnersRequest;
 		
 		uuid_generate(request_id);
-		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSREQUEST, request_id, &partnersRequest);
+		this->socket_write_message(MSG_ID_AVAILABLETRADEPARTNERSREQUEST, request_id, &partnersRequest);
 		
-		this->add_callback(request_id, [callback, data](const google::protobuf::MessageLite * message){
+		this->add_callback(request_id, [callback, data](const google::protobuf::MessageLite * message) {
 			callback(static_cast<const AvailableTradePartnersResponse *>(message), data);
 		});
 	}
@@ -59,7 +43,7 @@ namespace escrow {
 		
 		uuid_generate(request_id);
 		echoRequest.set_message(message);
-		socket_write_message(this->m_sock_fd, MSG_ID_ECHOREQUEST, request_id, &echoRequest);
+		this->socket_write_message(MSG_ID_ECHOREQUEST, request_id, &echoRequest);
 
 		this->add_callback(request_id, [callback, data](const google::protobuf::MessageLite * message){
 			callback(static_cast<const EchoResponse *>(message), data);
@@ -69,7 +53,7 @@ namespace escrow {
 	void ClientProcess::cmd_SessionStartRequest() {
 		escrow::SessionStartRequest sessionStartRequest;
 		sessionStartRequest.set_client_id(this->m_client_id, sizeof(uuid_t));
-		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTREQUEST, nullptr, &sessionStartRequest);
+		this->socket_write_message(MSG_ID_SESSIONSTARTREQUEST, nullptr, &sessionStartRequest);
 	}
 
 	template<> void ClientProcess::handle(const escrow::AvailableTradePartnersResponse * partnersResponse) {
@@ -114,56 +98,6 @@ namespace escrow {
 				error("ERROR unknown session start error code");
 				break;
 		}
-	}
-
-	bool ClientProcess::process_message(bool wait) {
-		struct pollfd sds;
-		char buffer[MESSAGE_BUFFER_SIZE];
-		int n = 0;
-		
-		sds.fd = this->m_sock_fd;
-		sds.events = POLLIN | POLLPRI | POLLHUP;
-		
-		if (poll(&sds, 1, wait ? -1 : 100) == 1) {
-			if (sds.revents & POLLHUP) {
-				return false;
-			} else if (sds.revents & POLLPRI) {
-				n = recv(this->m_sock_fd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
-			} else {
-				n = recv(this->m_sock_fd, buffer, MESSAGE_BUFFER_SIZE, 0);
-			}
-			
-			if (n == 0) {
-				return false;
-			}
-			
-			if (n < 0) {
-				error("ERROR reading from socket");
-			}
-			
-			if (n > 0) {
-				message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
-					switch (wrapper->message_id) {
-						case MSG_ID_ECHORESPONSE:
-							this->handle(static_cast<escrow::EchoResponse *>(message));
-							break;
-						case MSG_ID_SESSIONSTARTRESPONSE:
-							this->handle(static_cast<escrow::SessionStartResponse *>(message));
-							break;
-						case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
-							this->handle(static_cast<escrow::AvailableTradePartnersResponse *>(message));
-							break;
-						default:
-							error("ERROR unhandled message");
-							break;
-					}
-					
-					this->invoke_callback(wrapper->request_id, message);
-				});
-			}
-		}
-		
-		return true;
 	}
 	
 	bool ClientProcess::start_session()
