@@ -2,6 +2,7 @@
 #define SHARED_H
 #include <functional>
 #include <map>
+#include <sstream>
 #include <unistd.h>
 #include <sys/poll.h>
 #include <sys/types.h>
@@ -26,9 +27,6 @@ void error(const char *msg);
 
 void info(const char *msg);
 
-void message_dispatch(const char * buffer, const size_t buffer_size, const std::function<void(const escrow::MessageWrapper *, google::protobuf::MessageLite *)> & handler);
-
-void socket_write_message(const int sockfd, const int message_id, const uuid_t request_id, const google::protobuf::MessageLite * message);
 
 namespace escrow {
 	using namespace std;
@@ -36,6 +34,7 @@ namespace escrow {
 	template <typename T>
 	using MessageCallback = function<void(const T *, void * data)>;
 	using MessageCallbackInt = function<void(const google::protobuf::MessageLite *)>;
+	using MessageHandler = function<void(const MessageWrapper *, google::protobuf::MessageLite *)>;
 	
 	template <typename D>
 	class BaseProcess {
@@ -50,6 +49,7 @@ namespace escrow {
 		map<string, MessageCallbackInt> m_callbacks;
 	
 		void invoke_callback(const uuid_t & request_id, const google::protobuf::MessageLite * message);		
+		void message_dispatch(const char * buffer, const size_t buffer_size, const MessageHandler & handler);
 	};
 }
 

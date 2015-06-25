@@ -19,6 +19,45 @@ namespace escrow {
 	}
 	
 	template<typename D>
+	void BaseProcess<D>::message_dispatch(const char * buffer, const size_t buffer_size, const MessageHandler & handler) {
+		MessageWrapper requestFrame;
+		if (create_wrapper_from_buffer(buffer, buffer_size, &requestFrame) == false) {
+			error("ERROR copying buffer to request frame");
+		}
+		
+		google::protobuf::MessageLite * message;
+		switch (requestFrame.message_id) {
+			case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
+				message = new AvailableTradePartnersRequest();
+				break;
+			case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
+				message = new AvailableTradePartnersResponse();
+				break;
+			case MSG_ID_ECHOREQUEST:
+				message = new EchoRequest();
+				break;
+			case MSG_ID_ECHORESPONSE:
+				message = new EchoResponse();
+				break;
+			case MSG_ID_SESSIONSTARTREQUEST:
+				message = new SessionStartRequest();
+				break;
+			case MSG_ID_SESSIONSTARTRESPONSE:
+				message = new SessionStartResponse();
+				break;
+			default:
+				error("ERROR unknown message id");
+				break;
+		}
+		
+		if (create_protobuf_from_wrapper(&requestFrame, message) == false) {
+			error("ERROR parsing protobuf from array");
+		}
+		handler(&requestFrame, message);
+		delete message;
+	}
+	
+	template<typename D>
 	bool BaseProcess<D>::process_message(int timeout)
 	{
 		struct pollfd sds;
@@ -46,26 +85,26 @@ namespace escrow {
 			}
 			
 			if (n > 0) {
-				::message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
+				this->message_dispatch(buffer, n, [this](const MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
 					D * derived = static_cast<D *>(this);
 					switch (wrapper->message_id) {
 						case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-							derived->handle(wrapper, static_cast<escrow::AvailableTradePartnersRequest *>(message));
+							derived->handle(wrapper, static_cast<AvailableTradePartnersRequest *>(message));
 							break;
 						case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
-							derived->handle(wrapper, static_cast<escrow::AvailableTradePartnersResponse *>(message));
+							derived->handle(wrapper, static_cast<AvailableTradePartnersResponse *>(message));
 							break;
 						case MSG_ID_ECHOREQUEST:
 							derived->handle(wrapper, static_cast<EchoRequest *>(message));
 							break;
 						case MSG_ID_ECHORESPONSE:
-							derived->handle(wrapper, static_cast<escrow::EchoResponse *>(message));
+							derived->handle(wrapper, static_cast<EchoResponse *>(message));
 							break;
 						case MSG_ID_SESSIONSTARTREQUEST:
 							derived->handle(wrapper, static_cast<SessionStartRequest *>(message));
 							break;
 						case MSG_ID_SESSIONSTARTRESPONSE:
-							derived->handle(wrapper, static_cast<escrow::SessionStartResponse *>(message));
+							derived->handle(wrapper, static_cast<SessionStartResponse *>(message));
 							break;
 						default:
 							error("ERROR unhandled message");
@@ -83,6 +122,26 @@ namespace escrow {
 
 	template<typename D>
 	void BaseProcess<D>::socket_write_message(const int message_id, const uuid_t request_id, const google::protobuf::MessageLite * message) {
-		::socket_write_message(this->m_sock_fd, message_id, request_id, message);
+		stringstream logmsg;
+		uuid_t actual_request_id;
+		if (message->IsInitialized() == false) {
+			logmsg << "ERROR message not prepared: " << message->InitializationErrorString() << std::endl;
+			error(logmsg.str().c_str());
+		}
+		
+		MessageWrapper responseFrame;
+		if (request_id == nullptr) {
+			uuid_generate(actual_request_id);
+		} else {
+			uuid_copy(actual_request_id, request_id);
+		}
+		if (create_wrapper_from_protobuf(message, message_id, actual_request_id, &responseFrame) == false) {
+			error("ERROR framing response");
+		}
+		
+		int n = write(this->m_sock_fd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
+		if (n < 0) {
+			error("ERROR writing to socket");
+		}
 	}
 }
