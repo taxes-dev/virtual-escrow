@@ -6,6 +6,7 @@
 #include "echo.pb.h"
 #include "session.pb.h"
 #include "trade.pb.h"
+#include "shared/messageformat.h"
 #include "shared/shared.h"
 #include "shared/virtualitems.h"
 
@@ -26,7 +27,7 @@ namespace escrow {
 		void cmd_EchoRequest(const string & message, const MessageCallback<EchoResponse> & callback, void * data);
 	protected:
 		template <typename T>
-		void handle(const T * message) { };
+		void handle(const MessageWrapper * wrapper, const T * message) { };
 	private:
 		uuid_t m_client_id;
 		string m_str_client_id;

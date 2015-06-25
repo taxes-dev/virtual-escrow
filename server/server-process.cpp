@@ -14,54 +14,48 @@
 namespace escrow {
 	using namespace std;
 	
-	template<> void ServerProcess::handle(const AvailableTradePartnersRequest * partnersRequest, const uuid_t & request_id) {
+	template<> void ServerProcess::handle(const MessageWrapper * wrapper, const AvailableTradePartnersRequest * partnersRequest) {
 		stringstream query;
 		DatabaseResults results;
 		DatabaseResults::iterator iter;
 		uuid_t u_client_id;
 		char s_client_id[UUID_STR_SIZE];
 		
-		AvailableTradePartnersResponse * partnersResponse = new AvailableTradePartnersResponse();
+		AvailableTradePartnersResponse partnersResponse;
 		
 		uuid_unparse(this->m_client_id, s_client_id);
 		query << "SELECT client_id FROM sessions WHERE client_id != '" << s_client_id << "';" << std::endl;
-		this->db->exec_with_results(query.str(), &results);
+		this->db.exec_with_results(query.str(), &results);
 		
-		for (iter = results.begin(); iter < results.end(); ++iter) {
-			DatabaseRow row = *iter;
-			
+		for (auto row : results) {			
 			bzero((char *)u_client_id, sizeof(uuid_t));
 			uuid_parse(row["client_id"].c_str(), u_client_id);
-			partnersResponse->add_client_id((char *)u_client_id, sizeof(uuid_t));
+			partnersResponse.add_client_id((char *)u_client_id, sizeof(uuid_t));
 		}
 		
-		socket_write_message(this->m_sock_fd, MSG_ID_AVAILABLETRADEPARTNERSRESPONSE, request_id, partnersResponse);
-		
-		delete partnersResponse;
+		socket_write_message(MSG_ID_AVAILABLETRADEPARTNERSRESPONSE, wrapper->request_id, &partnersResponse);
 	}
 	
-	template<> void ServerProcess::handle(const EchoRequest * echoRequest, const uuid_t & request_id) {
+	template<> void ServerProcess::handle(const MessageWrapper * wrapper, const EchoRequest * echoRequest) {
 		stringstream logmsg;
 		
 		logmsg << "Here is the message: " << echoRequest->message() << std::endl; 
 		info(logmsg.str().c_str());
 		
-		EchoResponse * echoResponse = new EchoResponse();
-		echoResponse->set_message(echoRequest->message());
+		EchoResponse echoResponse;
+		echoResponse.set_message(echoRequest->message());
 		
-		socket_write_message(this->m_sock_fd, MSG_ID_ECHORESPONSE, request_id, echoResponse);
-		
-		delete echoResponse;
+		this->socket_write_message(MSG_ID_ECHORESPONSE, wrapper->request_id, &echoResponse);
 	}
 	
-	template<> void ServerProcess::handle(const SessionStartRequest * sessionStartRequest, const uuid_t & request_id) {
-		SessionStartResponse * sessionStartResponse = new SessionStartResponse();
+	template<> void ServerProcess::handle(const MessageWrapper * wrapper, const SessionStartRequest * sessionStartRequest) {
+		SessionStartResponse sessionStartResponse;
 		
 		// message out of order?
 		if (this->m_connected) {
-			sessionStartResponse->set_client_id(this->m_client_id, sizeof(uuid_t));
-			sessionStartResponse->set_session_id(this->m_session_id, sizeof(uuid_t));
-			sessionStartResponse->set_error(SessionStartError::SESSION_STARTED);
+			sessionStartResponse.set_client_id(this->m_client_id, sizeof(uuid_t));
+			sessionStartResponse.set_session_id(this->m_session_id, sizeof(uuid_t));
+			sessionStartResponse.set_error(SessionStartError::SESSION_STARTED);
 		} else {
 			stringstream logmsg, query;
 			DatabaseResults results;
@@ -73,33 +67,31 @@ namespace escrow {
 			info(logmsg.str().c_str());
 			
 			// create response
-			sessionStartResponse->set_client_id(this->m_client_id, sizeof(uuid_t));
+			sessionStartResponse.set_client_id(this->m_client_id, sizeof(uuid_t));
 			
 			// check for duplicate session
 			query << "SELECT session_id FROM sessions WHERE client_id = '" << this->m_str_client_id << "';" << std::endl;
 			
-			this->db->exec_with_results(query.str(), &results);
+			this->db.exec_with_results(query.str(), &results);
 			if (results.size() > 0) {
 				// duplicate client
 				uuid_t t_session_id;
 				uuid_parse(results.back()["session_id"].c_str(), t_session_id); 
-				sessionStartResponse->set_session_id(t_session_id, sizeof(uuid_t));
-				sessionStartResponse->set_error(SessionStartError::CLIENT_ALREADY_CONNECTED);
+				sessionStartResponse.set_session_id(t_session_id, sizeof(uuid_t));
+				sessionStartResponse.set_error(SessionStartError::CLIENT_ALREADY_CONNECTED);
 			} else {
 				// generate new session id and record
 				this->start_session();
-				sessionStartResponse->set_session_id(this->m_session_id, sizeof(uuid_t));
-				sessionStartResponse->set_error(SessionStartError::OK);
+				sessionStartResponse.set_session_id(this->m_session_id, sizeof(uuid_t));
+				sessionStartResponse.set_error(SessionStartError::OK);
 				
 				query.str("");
 				query << "INSERT INTO sessions VALUES ('" << this->m_str_client_id << "', '" << this->m_str_session_id << "');" << std::endl;
-				this->db->exec(query.str());
+				this->db.exec(query.str());
 			}
 		}
 		
-		socket_write_message(this->m_sock_fd, MSG_ID_SESSIONSTARTRESPONSE, request_id, sessionStartResponse);
-		
-		delete sessionStartResponse;
+		this->socket_write_message(MSG_ID_SESSIONSTARTRESPONSE, wrapper->request_id, &sessionStartResponse);
 	}
 	
 	void ServerProcess::set_client_id(const string & client_id)
@@ -119,65 +111,18 @@ namespace escrow {
 		}
 	}
 	
-	void ServerProcess::process() {
-		char buffer[MESSAGE_BUFFER_SIZE];
-		int n;
-		struct pollfd sds;
-		
-		this->db = new ServerDatabase();
-		this->db->open();
-		
-		while (1) {
-			sds.fd = this->m_sock_fd;
-			sds.events = POLLIN | POLLPRI | POLLHUP;
-			sds.revents = 0;
-			
-			if (poll(&sds, 1, 100) == 1) {
-				if (sds.revents & POLLHUP) {
-					break;
-				} else if (sds.revents & POLLPRI) {
-					bzero(buffer, MESSAGE_BUFFER_SIZE);
-					n = recv(this->m_sock_fd, buffer, MESSAGE_BUFFER_SIZE, MSG_OOB);
-				} else {
-					bzero(buffer, MESSAGE_BUFFER_SIZE);
-					n = recv(this->m_sock_fd, buffer, MESSAGE_BUFFER_SIZE, 0);
-				}
-				
-				if (n == 0) {
-					break;
-				}
-				
-				if (n < 0) {
-					error("ERROR reading from socket");
-				}
-				
-				message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
-					switch (wrapper->message_id) {
-						case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
-							this->handle(static_cast<AvailableTradePartnersRequest *>(message), wrapper->request_id);
-							break;
-						case MSG_ID_ECHOREQUEST:
-							this->handle(static_cast<EchoRequest *>(message), wrapper->request_id);
-							break;
-						case MSG_ID_SESSIONSTARTREQUEST:
-							this->handle(static_cast<SessionStartRequest *>(message), wrapper->request_id);
-							break;
-						default:
-							error("ERROR unhandled message");
-							break;
-					}
-				});
-			}
-		}
+	void ServerProcess::run()
+	{
+		this->db.open();
+
+		while (this->process_message()) ;
 		
 		info("Client disconnected, shutting down");
 		{
 			stringstream query;
 			query << "DELETE FROM sessions WHERE client_id = '" << this->m_str_client_id << "';" << std::endl;
-			this->db->exec(query.str());
-			this->db->close();
+			this->db.exec(query.str());
+			this->db.close();
 		}
-		delete this->db;
-	}
-	
+	}	
 }

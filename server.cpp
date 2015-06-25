@@ -68,9 +68,8 @@ int main(int argc, char **argv) {
 		if (pid == 0) {
 			/* This is the client process */
 			close(sockfd);
-			escrow::ServerProcess * serverProcess = new escrow::ServerProcess(newsockfd);
-			serverProcess->process(); // blocks until done
-			delete serverProcess;
+			escrow::ServerProcess serverProcess(newsockfd);
+			serverProcess.run(); // blocks until done
 			break;
 		} else {
 			close(newsockfd);

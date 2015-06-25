@@ -19,7 +19,7 @@ namespace escrow {
 	}
 	
 	template<typename D>
-	bool BaseProcess<D>::process_message(bool wait)
+	bool BaseProcess<D>::process_message(int timeout)
 	{
 		struct pollfd sds;
 		char buffer[MESSAGE_BUFFER_SIZE];
@@ -28,7 +28,7 @@ namespace escrow {
 		sds.fd = this->m_sock_fd;
 		sds.events = POLLIN | POLLPRI | POLLHUP;
 		
-		if (poll(&sds, 1, wait ? -1 : 100) == 1) {
+		if (poll(&sds, 1, timeout) == 1) {
 			if (sds.revents & POLLHUP) {
 				return false;
 			} else if (sds.revents & POLLPRI) {
@@ -46,17 +46,26 @@ namespace escrow {
 			}
 			
 			if (n > 0) {
-				message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
+				::message_dispatch(buffer, n, [this](const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * message) {
 					D * derived = static_cast<D *>(this);
 					switch (wrapper->message_id) {
-						case MSG_ID_ECHORESPONSE:
-							derived->handle(static_cast<escrow::EchoResponse *>(message));
-							break;
-						case MSG_ID_SESSIONSTARTRESPONSE:
-							derived->handle(static_cast<escrow::SessionStartResponse *>(message));
+						case MSG_ID_AVAILABLETRADEPARTNERSREQUEST:
+							derived->handle(wrapper, static_cast<escrow::AvailableTradePartnersRequest *>(message));
 							break;
 						case MSG_ID_AVAILABLETRADEPARTNERSRESPONSE:
-							derived->handle(static_cast<escrow::AvailableTradePartnersResponse *>(message));
+							derived->handle(wrapper, static_cast<escrow::AvailableTradePartnersResponse *>(message));
+							break;
+						case MSG_ID_ECHOREQUEST:
+							derived->handle(wrapper, static_cast<EchoRequest *>(message));
+							break;
+						case MSG_ID_ECHORESPONSE:
+							derived->handle(wrapper, static_cast<escrow::EchoResponse *>(message));
+							break;
+						case MSG_ID_SESSIONSTARTREQUEST:
+							derived->handle(wrapper, static_cast<SessionStartRequest *>(message));
+							break;
+						case MSG_ID_SESSIONSTARTRESPONSE:
+							derived->handle(wrapper, static_cast<escrow::SessionStartResponse *>(message));
 							break;
 						default:
 							error("ERROR unhandled message");

@@ -54,7 +54,7 @@ namespace escrow {
 
 	void ClientUI::socket_thread() {
 		while (this->is_running()) {
-			if (this->m_process->process_message(false) == false) { // process_message blocks for up to 100ms
+			if (this->m_process->process_message() == false) { // process_message blocks for up to 100ms
 				info("Lost connection, shutting down");
 				this->m_running = false;
 			}

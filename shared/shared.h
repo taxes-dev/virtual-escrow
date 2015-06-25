@@ -13,6 +13,8 @@
 #include "trade.pb.h"
 
 #define UUID_STR_SIZE 37
+#define PROCESS_TIMEOUT_DEFAULT 100
+#define PROCESS_TIMEOUT_BLOCK -1
 
 bool create_protobuf_from_wrapper(const escrow::MessageWrapper * wrapper, google::protobuf::MessageLite * protobuf);
 
@@ -39,7 +41,7 @@ namespace escrow {
 	class BaseProcess {
 	public:
 		BaseProcess(const int sock_fd) { this->m_sock_fd = sock_fd; };
-		bool process_message(bool wait);		
+		bool process_message(int timeout = PROCESS_TIMEOUT_DEFAULT);		
 	protected:
 		void add_callback(const uuid_t & request_id, const MessageCallbackInt & callback);
 		void socket_write_message(const int message_id, const uuid_t request_id, const google::protobuf::MessageLite * message);

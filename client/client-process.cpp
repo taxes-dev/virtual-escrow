@@ -56,7 +56,7 @@ namespace escrow {
 		this->socket_write_message(MSG_ID_SESSIONSTARTREQUEST, nullptr, &sessionStartRequest);
 	}
 
-	template<> void ClientProcess::handle(const escrow::AvailableTradePartnersResponse * partnersResponse) {
+	template<> void ClientProcess::handle(const MessageWrapper * wrapper, const escrow::AvailableTradePartnersResponse * partnersResponse) {
 		/*uuid_t u_client_id;
 		char s_client_id[UUID_STR_SIZE];
 		google::protobuf::RepeatedPtrField<std::string>::const_iterator iter;
@@ -79,13 +79,13 @@ namespace escrow {
 		}*/
 	}
 
-	template<> void ClientProcess::handle(const escrow::EchoResponse * echoResponse) {
+	template<> void ClientProcess::handle(const MessageWrapper * wrapper, const escrow::EchoResponse * echoResponse) {
 		std::stringstream logmsg;
 		logmsg << "Got response: " << echoResponse->message() << std::endl;
 		info(logmsg.str().c_str());
 	}
 
-	template<> void ClientProcess::handle(const escrow::SessionStartResponse * sessionStartResponse) {
+	template<> void ClientProcess::handle(const MessageWrapper * wrapper, const escrow::SessionStartResponse * sessionStartResponse) {
 		switch (sessionStartResponse->error()) {
 			case SessionStartError::OK:
 				sessionStartResponse->session_id().copy((char *)this->m_session_id, sizeof(uuid_t));
@@ -103,7 +103,7 @@ namespace escrow {
 	bool ClientProcess::start_session()
 	{
 		this->cmd_SessionStartRequest();
-		this->process_message(true); // block until we get a SessionStartResponse
+		this->process_message(PROCESS_TIMEOUT_BLOCK); // block until we get a SessionStartResponse
 		return this->m_session_set;
 	}
 
