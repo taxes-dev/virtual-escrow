@@ -26,7 +26,7 @@ namespace escrow {
 		char *errmsg = 0;
 		int rc = sqlite3_exec(this->m_db, command.c_str(), 0, 0, &errmsg);
 		if (rc != SQLITE_OK) {
-			error(errmsg);
+			Logger::fatal(errmsg);
 			sqlite3_free(errmsg);
 		}
 	}
@@ -37,7 +37,7 @@ namespace escrow {
 		int rc = sqlite3_exec(this->m_db, command.c_str(), db_callback, results, &errmsg);
 		
 		if (rc != SQLITE_OK) {
-			error(errmsg);
+			Logger::fatal(errmsg);
 			sqlite3_free(errmsg);
 		}
 	}
@@ -49,7 +49,7 @@ namespace escrow {
 		int rc = sqlite3_open(DB_NAME, &(this->m_db));
 		if (rc) {
 			sqlite3_close(this->m_db);
-			error("ERROR can't open db");
+			Logger::fatal("ERROR can't open db");
 		}
 		
 		// create schema if it doesn't exist

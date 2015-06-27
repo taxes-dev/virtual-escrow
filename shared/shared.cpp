@@ -36,15 +36,3 @@ bool create_wrapper_from_protobuf(const google::protobuf::MessageLite * protobuf
 	return true;
 }
 
-void error(const char *msg) {
-	pid_t pid = getpid();
-	std::cerr << "[" << pid << " ERROR] " << msg << std::endl;
-	exit(1);
-}
-
-void info(const char *msg) {
-	pid_t pid = getpid();
-	std::cout << "[" << pid << " INFO] " << msg << std::endl;
-}
-
-

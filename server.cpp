@@ -14,6 +14,8 @@
 #include "server/server-db.h"
 #include "server/server-process.h"
 
+using namespace escrow;
+
 int main(int argc, char **argv) {
 	int sockfd, newsockfd, portno;
 	socklen_t clilen;
@@ -24,14 +26,14 @@ int main(int argc, char **argv) {
 	GOOGLE_PROTOBUF_VERIFY_VERSION;
 	
 	if (argc < 2) {
-		error("ERROR, no port provided");
+		Logger::fatal("ERROR, no port provided");
 	}
 	
-	escrow::ServerDatabase::clean();
+	ServerDatabase::clean();
 	
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
 	if (sockfd < 0) { 
-		error("ERROR opening socket");
+		Logger::fatal("ERROR opening socket");
 	}
 	
 	bzero((char *) &serv_addr, sizeof(serv_addr));
@@ -40,7 +42,7 @@ int main(int argc, char **argv) {
 	serv_addr.sin_addr.s_addr = INADDR_ANY;
 	serv_addr.sin_port = htons(portno);
 	if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0) { 
-		error("ERROR on binding");
+		Logger::fatal("ERROR on binding");
 	}
 	
 	listen(sockfd, 5);
@@ -48,27 +50,27 @@ int main(int argc, char **argv) {
 	
 	while (1)
 	{
-		info("Waiting for connection");
+		Logger::info("Waiting for connection");
 		newsockfd = accept(sockfd, (struct sockaddr *) &cli_addr, &clilen);
 		if (newsockfd < 0) {
-			error("ERROR on accept");
+			Logger::fatal("ERROR on accept");
 		}
 		
 		inet_ntop(AF_INET, &(cli_addr.sin_addr), cli_ip, INET_ADDRSTRLEN);
 		std::stringstream logmsg;
 		logmsg << "Client connected: " << cli_ip << ":" << cli_addr.sin_port << std::endl;
-		info(logmsg.str().c_str());
+		Logger::info(logmsg.str());
 		
 		/* Create child process */
 		pid = fork();
 		if (pid < 0) {
-			error("ERROR on fork");
+			Logger::fatal("ERROR on fork");
 		}
 		
 		if (pid == 0) {
 			/* This is the client process */
 			close(sockfd);
-			escrow::ServerProcess serverProcess(newsockfd);
+			ServerProcess serverProcess(newsockfd);
 			serverProcess.run(); // blocks until done
 			break;
 		} else {

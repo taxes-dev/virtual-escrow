@@ -82,7 +82,7 @@ namespace escrow {
 	template<> void ClientProcess::handle(const MessageWrapper * wrapper, const escrow::EchoResponse * echoResponse) {
 		std::stringstream logmsg;
 		logmsg << "Got response: " << echoResponse->message() << std::endl;
-		info(logmsg.str().c_str());
+		Logger::info(logmsg.str());
 	}
 
 	template<> void ClientProcess::handle(const MessageWrapper * wrapper, const escrow::SessionStartResponse * sessionStartResponse) {
@@ -95,7 +95,7 @@ namespace escrow {
 			case SessionStartError::SESSION_STARTED:
 				break;
 			default:
-				error("ERROR unknown session start error code");
+				Logger::warn("ERROR unknown session start error code");
 				break;
 		}
 	}

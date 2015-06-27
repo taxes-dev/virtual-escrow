@@ -55,7 +55,7 @@ namespace escrow {
 	void ClientUI::socket_thread() {
 		while (this->is_running()) {
 			if (this->m_process->process_message() == false) { // process_message blocks for up to 100ms
-				info("Lost connection, shutting down");
+				Logger::warn("Lost connection, shutting down");
 				this->m_running = false;
 			}
 		}
@@ -140,7 +140,7 @@ namespace escrow {
 		// create processing thread
 		int retval = pthread_create(&sockthread, nullptr, [](void * context) -> void * { static_cast<ClientUI *>(context)->socket_thread(); }, this);
 		if (retval) {
-			error("ERROR creating background thread");
+			Logger::fatal("ERROR creating background thread");
 		}
 		
 		this->refresh_inventory();

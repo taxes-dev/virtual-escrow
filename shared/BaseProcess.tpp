@@ -22,7 +22,8 @@ namespace escrow {
 	void BaseProcess<D>::message_dispatch(const char * buffer, const size_t buffer_size, const MessageHandler & handler) {
 		MessageWrapper requestFrame;
 		if (create_wrapper_from_buffer(buffer, buffer_size, &requestFrame) == false) {
-			error("ERROR copying buffer to request frame");
+			Logger::warn("ERROR copying buffer to request frame");
+			return;
 		}
 		
 		google::protobuf::MessageLite * message;
@@ -46,14 +47,15 @@ namespace escrow {
 				message = new SessionStartResponse();
 				break;
 			default:
-				error("ERROR unknown message id");
-				break;
+				Logger::warn("ERROR unknown message id");
+				return;
 		}
 		
 		if (create_protobuf_from_wrapper(&requestFrame, message) == false) {
-			error("ERROR parsing protobuf from array");
+			Logger::warn("ERROR parsing protobuf from array");
+		} else {
+			handler(&requestFrame, message);
 		}
-		handler(&requestFrame, message);
 		delete message;
 	}
 	
@@ -81,7 +83,7 @@ namespace escrow {
 			}
 			
 			if (n < 0) {
-				error("ERROR reading from socket");
+				Logger::fatal("ERROR reading from socket");
 			}
 			
 			if (n > 0) {
@@ -107,7 +109,7 @@ namespace escrow {
 							derived->handle(wrapper, static_cast<SessionStartResponse *>(message));
 							break;
 						default:
-							error("ERROR unhandled message");
+							Logger::warn("ERROR unhandled message");
 							break;
 					}
 					
@@ -126,7 +128,7 @@ namespace escrow {
 		uuid_t actual_request_id;
 		if (message->IsInitialized() == false) {
 			logmsg << "ERROR message not prepared: " << message->InitializationErrorString() << std::endl;
-			error(logmsg.str().c_str());
+			Logger::fatal(logmsg.str());
 		}
 		
 		MessageWrapper responseFrame;
@@ -136,12 +138,12 @@ namespace escrow {
 			uuid_copy(actual_request_id, request_id);
 		}
 		if (create_wrapper_from_protobuf(message, message_id, actual_request_id, &responseFrame) == false) {
-			error("ERROR framing response");
+			Logger::fatal("ERROR framing response");
 		}
 		
 		int n = write(this->m_sock_fd, &responseFrame, MESSAGEWRAPPER_SIZE(responseFrame));
 		if (n < 0) {
-			error("ERROR writing to socket");
+			Logger::fatal("ERROR writing to socket");
 		}
 	}
 }

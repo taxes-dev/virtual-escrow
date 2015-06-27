@@ -40,7 +40,7 @@ namespace escrow {
 		stringstream logmsg;
 		
 		logmsg << "Here is the message: " << echoRequest->message() << std::endl; 
-		info(logmsg.str().c_str());
+		Logger::info(logmsg.str());
 		
 		EchoResponse echoResponse;
 		echoResponse.set_message(echoRequest->message());
@@ -64,7 +64,7 @@ namespace escrow {
 			this->set_client_id(sessionStartRequest->client_id());
 			
 			logmsg << "Got connection from: " << this->m_str_client_id << std::endl;
-			info(logmsg.str().c_str());
+			Logger::info(logmsg.str());
 			
 			// create response
 			sessionStartResponse.set_client_id(this->m_client_id, sizeof(uuid_t));
@@ -117,7 +117,8 @@ namespace escrow {
 
 		while (this->process_message()) ;
 		
-		info("Client disconnected, shutting down");
+		Logger::info("Client disconnected, shutting down");
+		
 		{
 			stringstream query;
 			query << "DELETE FROM sessions WHERE client_id = '" << this->m_str_client_id << "';" << std::endl;
