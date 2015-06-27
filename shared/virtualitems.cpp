@@ -44,7 +44,8 @@ namespace escrow {
 	
 	void generate_random_inventory(Inventory & inventory, const int size, const uuid_t owner) {
 		if (size > 0) {
-			default_random_engine generator;
+			random_device rd;
+			default_random_engine generator(rd());
 			uniform_int_distribution<int> distribution(0, 9);
 			auto randitem = bind(distribution, generator);
 			

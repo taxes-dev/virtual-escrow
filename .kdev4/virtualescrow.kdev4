@@ -48,12 +48,20 @@ Type=Native Application
 
 [Launch][Launch Configuration 1][Data]
 Arguments=localhost 5001
+Debugger Shell=
 Dependencies=@Variant(\x00\x00\x00\t\x00\x00\x00\x00\x00)
 Dependency Action=Nothing
+Display Demangle Names=true
+Display Static Members=false
 EnvironmentGroup=
 Executable=file:///home/havi/Projects/virtualescrow/
 External Terminal=konsole --noclose --workdir %workdir -e %exe
+GDB Path=
 Project Target=virtualescrow,ve-client
+Remote GDB Config Script=file:///home/havi/Projects/virtualescrow/start.gdb
+Remote GDB Run Script=
+Remote GDB Shell Script=
+Start With=ApplicationOutput
 Use External Terminal=true
 Working Directory=
 isExecutable=false
