@@ -20,6 +20,7 @@ namespace escrow {
 	public:
 		ClientProcess(const int sock_fd);
 		inline string client_id_parsed() { return this->m_str_client_id; };
+		void copy_client_id(uuid_t * dst);
 		inline Inventory * inventory() { return &this->m_inventory; };
 		bool start_session();
 
@@ -37,6 +38,11 @@ namespace escrow {
 
 		void cmd_SessionStartRequest();		
 	};
+	
+	inline void ClientProcess::copy_client_id(uuid_t * dst)
+	{
+		uuid_copy(*dst, this->m_client_id);
+	}
 }
 
 #endif

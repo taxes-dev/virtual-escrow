@@ -73,7 +73,10 @@ namespace escrow {
 	
 	void ClientUI::refresh_inventory() {
 		uuid_t owner_id;
+		uuid_t this_id;
 		Inventory * inventory = this->m_process->inventory();
+		
+		this->m_process->copy_client_id(&this_id);
 		
 		Fl::lock();
 		this->m_fl_inventory->clear();
@@ -81,14 +84,21 @@ namespace escrow {
 			
 			bzero(owner_id, sizeof(uuid_t));
 			item->copy_original_owner_id(&owner_id);
+			bool is_local = uuid_compare(this_id, owner_id) == 0;
 			
-			Fl_Box * box = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, 0, 250, 25, item->desc().c_str());
+			Fl_Pack * pack = new Fl_Pack(0, 0, this->m_fl_inventory->w(), 25);
+			pack->type(Fl_Pack::HORIZONTAL);
+			pack->resizable(pack);
+			
+			Fl_Box * box = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, 0, this->m_fl_inventory->w() - 30, 25, item->desc().c_str());
 			box->color(fl_rgb_color(255, 255, 255));
-			this->m_fl_inventory->add(box);
+			pack->add(box);
 			
-			/*std::cout << i << ") " << item->desc() << " [instance " << item->instance_id_parsed() << "] [local: " << (
-				uuid_compare(this->m_client_id, owner_id) == 0 ? "Y" : "N"
-			) << "]" << std::endl;*/
+			Fl_Box * box2 = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, this->m_fl_inventory->w() - 30, 30, 25, is_local ? "L" : "X");
+			box2->color(is_local ? fl_rgb_color(0, 127, 0) : fl_rgb_color(127, 0, 0));
+			pack->add(box2);
+			
+			this->m_fl_inventory->add(pack);
 		}
 		this->m_fl_inventory->redraw();
 		Fl::awake();
