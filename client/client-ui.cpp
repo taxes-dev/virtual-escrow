@@ -1,3 +1,5 @@
+#include <chrono>
+#include <ctime>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -41,9 +43,16 @@ namespace escrow {
 	
 	void ClientUI::add_output(const string & text)
 	{
+		time_t t = time(nullptr);
+		tm lt = *localtime(&t);
+		char buffer[32];
+		strftime(buffer, 32, "%T", &lt);
+		
+		stringstream output;
+		output << "[" << buffer << "] " << text << endl;
+		
 		Fl::lock();
-		this->m_fl_output->insert(text.c_str());
-		this->m_fl_output->insert("\n");
+		this->m_fl_output->insert(output.str().c_str());
 		this->m_fl_output->show_insert_position();
 		Fl::awake();
 		Fl::unlock();
@@ -63,10 +72,8 @@ namespace escrow {
 				steady_clock::time_point t = steady_clock::now();
 				duration<double> time_span = duration_cast<duration<double>>(t - this->m_time);
 				if (time_span.count() > REFRESH_INTERVAL) {
-					Logger::info("Interval elapsed");
-					//this->m_process->cmd_AvailableTradePartnersRequest(
-					//	[](const AvailableTradePartnersResponse * message, void * data) { static_cast<ClientUI *>(data)->update_trade_partners(message); }, this);
-					this->refresh_inventory();
+					this->m_process->cmd_AvailableTradePartnersRequest(
+						[](const AvailableTradePartnersResponse * message, void * data) { static_cast<ClientUI *>(data)->update_trade_partners(message); }, this);
 					this->m_time = t;
 				}
 			}
@@ -83,8 +90,16 @@ namespace escrow {
 		}, this);
 	}
 	
+	void ClientUI::trade_button_callback(const char * client_id)
+	{
+		Logger::info("trade button pressed");
+		Logger::info(client_id);
+	}
+
+	
 	void ClientUI::refresh_inventory() {
 		uuid_t owner_id;
+		char s_owner_id[UUID_STR_SIZE];
 		uuid_t this_id;
 		Inventory * inventory = this->m_process->inventory();
 		
@@ -92,28 +107,33 @@ namespace escrow {
 		
 		Fl::lock();
 		this->m_fl_inventory->clear();
+		this->m_fl_inventory->begin();
 		for (auto & item : *inventory) {
 			
 			bzero(owner_id, sizeof(uuid_t));
 			item->copy_original_owner_id(&owner_id);
 			bool is_local = uuid_compare(this_id, owner_id) == 0;
 			string desc = item->desc();
+			
+			bzero(s_owner_id, UUID_STR_SIZE);
+			uuid_unparse(owner_id, s_owner_id);
 						
 			Fl_Pack * pack = new Fl_Pack(0, 0, this->m_fl_inventory->w(), 25);
 			pack->type(Fl_Pack::HORIZONTAL);
 			pack->resizable(pack);
 			
-			Fl_Box * box = new CopyLabelBox(0, 0, this->m_fl_inventory->w() - 30, 25, desc);
+			Fl_Box * box = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, 0, this->m_fl_inventory->w() - 30, 25, 0);
+			box->copy_label(desc.c_str());
 			box->color(fl_rgb_color(255, 255, 255));
-			pack->add(box);
 			
 			Fl_Box * box2 = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, this->m_fl_inventory->w() - 30, 30, 25, is_local ? "L" : "X");
 			box2->color(is_local ? fl_rgb_color(0, 127, 0) : fl_rgb_color(127, 0, 0));
 			box2->labelcolor(fl_rgb_color(255, 255, 255));
-			pack->add(box2);
+			box2->copy_tooltip(s_owner_id);
 			
-			this->m_fl_inventory->add(pack);
+			pack->end();
 		}
+		this->m_fl_inventory->end();
 		this->m_fl_inventory->redraw();
 		Fl::awake();
 		Fl::unlock();
@@ -127,7 +147,7 @@ namespace escrow {
 		
 		Fl::lock();
 		this->m_fl_partners->clear();
-		Logger::info("Iterating trade partners:");
+		this->m_fl_partners->begin();
 		for (iter = message->client_id().begin(); iter < message->client_id().end(); ++iter) {
 			string clientid = *iter;
 			
@@ -136,22 +156,23 @@ namespace escrow {
 			clientid.copy((char  *)partner_id, sizeof(uuid_t));
 			uuid_unparse(partner_id, s_partner_id);
 			
-			Logger::info(s_partner_id);
-			
 			Fl_Pack * pack = new Fl_Pack(0, 0, this->m_fl_partners->w(), 25);
 			pack->type(Fl_Pack::HORIZONTAL);
-			pack->resizable(pack);
 			
 			Fl_Box * box = new Fl_Box(Fl_Boxtype::FL_BORDER_BOX, 0, 0, this->m_fl_partners->w() - 55, 25, 0);
 			box->copy_label(s_partner_id);
 			box->color(fl_rgb_color(255, 255, 255));
-			pack->add(box);
 			
-			Fl_Button * trade_button = new Fl_Button(0, this->m_fl_partners->w() - 55, 55, 25, "Trade");
-			pack->add(trade_button);
+			TaggedButton * trade_button = new TaggedButton(0, this->m_fl_partners->w() - 55, 55, 25, "Trade");
+			trade_button->set_tag(s_partner_id);
+			trade_button->callback([](Fl_Widget * widget, void * data) {
+				TaggedButton * button = static_cast<TaggedButton *>(widget);
+				static_cast<ClientUI *>(data)->trade_button_callback(button->tag());
+			}, this);
 			
-			this->m_fl_partners->add(pack);
+			pack->end();
 		}
+		this->m_fl_partners->end();
 		this->m_fl_partners->redraw();
 		Fl::awake();
 		Fl::unlock();

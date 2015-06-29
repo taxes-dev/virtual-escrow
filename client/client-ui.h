@@ -1,9 +1,9 @@
 #ifndef H_CLIENT_UI
 #define H_CLIENT_UI
 #include <chrono>
-#include <iostream>
 #include <memory>
 #include <FL/Fl_Box.H>
+#include <FL/Fl_Button.H>
 #include <FL/Fl_Input.H>
 #include <FL/Fl_Scroll.H>
 #include <FL/Fl_Text_Display.H>
@@ -22,17 +22,22 @@ namespace escrow {
 		void resize(int x, int y, int w, int h);
 	};
 	
-	class CopyLabelBox : public Fl_Box {
+	class TaggedButton : public Fl_Button {
 	public:
-		CopyLabelBox(int x, int y, int w, int h, string & label) : Fl_Box(Fl_Boxtype::FL_BORDER_BOX, x, y, w, h, 0) {
-			this->m_label_copy = new char[label.size() + 1];
-			label.copy(this->m_label_copy, label.size());
-			cout << " Copied: " << this->m_label_copy << endl;
-			this->label(this->m_label_copy);
+		TaggedButton(int x, int y, int w, int h, const char * label) : Fl_Button(x, y, w, h, label) { this->m_tag = 0; };
+		~TaggedButton() { if (this->m_tag) { free(this->m_tag); } };
+		char * tag() const { return this->m_tag; };
+		void set_tag(const char * tag) {
+			if (this->m_tag) {
+				free(this->m_tag);
+				this->m_tag = 0;
+			}
+			if (tag) {
+				this->m_tag = strdup(tag);
+			}
 		};
-		~CopyLabelBox() { delete this->m_label_copy; };
 	private:
-		char * m_label_copy;
+		char * m_tag;
 	};
 	
 	class ClientUI {
@@ -53,6 +58,7 @@ namespace escrow {
 		
 		void echo_button_callback();
 		void socket_thread();
+		void trade_button_callback(const char * client_id);
 		void update_trade_partners(const AvailableTradePartnersResponse * message);
 	};
 }
